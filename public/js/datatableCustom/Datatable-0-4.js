@@ -993,6 +993,7 @@ async function dataTableCreate(options) {
         lengthMenu: options.lengthMenu ?? [10, 25, 50, 75, 100],
         retrieve: options.retrieve ?? false,
         cache: options.cache ?? false,
+        deferLoading: options.deferLoading ?? null,
         select: options.select
             ? options.select === 'multi'
                 ? {

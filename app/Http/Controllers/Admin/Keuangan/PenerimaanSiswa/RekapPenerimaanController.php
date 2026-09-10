@@ -321,12 +321,52 @@ class RekapPenerimaanController extends Controller
         return $pdf->download('rekap-penerimaan-per-nis.pdf');
     }
 
+    private function hasMeaningfulPaymentFilter(array $filter): bool
+    {
+        foreach ($filter as $key => $val) {
+            if (is_array($val)) {
+                $selected = array_values(array_filter(
+                    $val,
+                    fn ($item) => $item !== null && $item !== '' && strtolower((string) $item) !== 'all'
+                ));
+                if ($selected !== []) {
+                    return true;
+                }
+                continue;
+            }
+
+            $value = trim((string) $val);
+            if ($value === '' || strtolower($value) === 'all') {
+                continue;
+            }
+
+            if ($key === 'tanggal-transaksi') {
+                return $this->parseDateRange($value) !== null;
+            }
+
+            return true;
+        }
+
+        return false;
+    }
+
     public function getData(Request $request)
     {
-        $metodeBayarMap = (new scctbill())->metodeBayar ?? [];
         $draw = $request->get('draw');
-        if (true) {
+        $emptyResponse = [
+            'draw' => intval($draw),
+            'recordsTotal' => 0,
+            'recordsFiltered' => 0,
+            'data' => [],
+        ];
 
+        $filter = $request->input('filter', []);
+        if (!$this->hasMeaningfulPaymentFilter(is_array($filter) ? $filter : [])) {
+            return response()->json($emptyResponse);
+        }
+
+        try {
+            $metodeBayarMap = (new scctbill())->metodeBayar ?? [];
             $start = $request->get("start");
             $rowperpage = $request->get("length");
 
@@ -592,15 +632,22 @@ class RekapPenerimaanController extends Controller
             }
 
             $records->toArray();
-        }
 
-        $response = array(
-            "draw" => intval($draw),
-            "recordsTotal" => $totalRecords ?? 0,
-            "recordsFiltered" => $totalRecordswithFilter ?? 0,
-            "data" => $records ?? [],
-        );
-        return response()->json($response);
+            return response()->json([
+                "draw" => intval($draw),
+                "recordsTotal" => $totalRecords ?? 0,
+                "recordsFiltered" => $totalRecordswithFilter ?? 0,
+                "data" => $records ?? [],
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                "draw" => intval($draw),
+                "recordsTotal" => 0,
+                "recordsFiltered" => 0,
+                "data" => [],
+                "error" => "Gagal memuat data pembayaran",
+            ], 500);
+        }
     }
 
     public function cetakRekapPenerimaan(Request $request)
