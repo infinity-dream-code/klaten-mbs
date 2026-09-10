@@ -321,54 +321,17 @@ class RekapPenerimaanController extends Controller
         return $pdf->download('rekap-penerimaan-per-nis.pdf');
     }
 
-    private function hasMeaningfulPaymentFilter(array $filter): bool
-    {
-        foreach ($filter as $key => $val) {
-            if (is_array($val)) {
-                $selected = array_values(array_filter(
-                    $val,
-                    fn ($item) => $item !== null && $item !== '' && strtolower((string) $item) !== 'all'
-                ));
-                if ($selected !== []) {
-                    return true;
-                }
-                continue;
-            }
-
-            $value = trim((string) $val);
-            if ($value === '' || strtolower($value) === 'all') {
-                continue;
-            }
-
-            if ($key === 'tanggal-transaksi') {
-                return $this->parseDateRange($value) !== null;
-            }
-
-            return true;
-        }
-
-        return false;
-    }
-
     public function getData(Request $request)
     {
         $draw = $request->get('draw');
-        $emptyResponse = [
-            'draw' => intval($draw),
-            'recordsTotal' => 0,
-            'recordsFiltered' => 0,
-            'data' => [],
-        ];
-
-        $filter = $request->input('filter', []);
-        if (!$this->hasMeaningfulPaymentFilter(is_array($filter) ? $filter : [])) {
-            return response()->json($emptyResponse);
-        }
 
         try {
             $metodeBayarMap = (new scctbill())->metodeBayar ?? [];
-            $start = $request->get("start");
-            $rowperpage = $request->get("length");
+            $start = max(0, (int) $request->get("start", 0));
+            $rowperpage = $request->get("length", 10);
+            $isKartuSiswa = $rowperpage === "poll";
+            $isPoll = $isKartuSiswa;
+            $pageSize = $isKartuSiswa ? 5000 : min(max((int) $rowperpage, 1), 100);
 
             $columnIndex_arr = $request->get('order', []);
             $columnName_arr = $request->get('columns', []);
@@ -376,8 +339,8 @@ class RekapPenerimaanController extends Controller
             $search_arr = $request->get('search', []);
             $searchValue = $search_arr['value'] ?? '';
 
-            $columnName = 'scctcust.NMCUST';
-            $columnSortOrder = 'ASC';
+            $columnName = 'sccttran.TRXDATE';
+            $columnSortOrder = 'desc';
 
             if (!empty($order_arr)) {
                 $columnIndex = $columnIndex_arr[0]['column'] ?? null;
@@ -595,31 +558,36 @@ class RekapPenerimaanController extends Controller
 
             $this->applyUnitScope($query);
 
-            $unitCache = blank($this->sekolah) ? 'all' : md5((string) $this->sekolah);
-            $totalRecords = Cache::remember(
-                "{$this->cacheKey}:total_all_data:v4:{$unitCache}",
-                now()->addMinutes(10),
-                function () {
-                    $baseQuery = $this->paymentBaseQuery();
-                    $this->applyUnitScope($baseQuery);
-                    return $baseQuery->count('sccttran.urut');
-                }
-            );
+            $recordsQuery = (clone $query)->select($select);
 
-            $totalRecordswithFilter = (clone $query)
-                ->count('sccttran.urut');
+            if ($isPoll) {
+                $recordsQuery
+                    ->orderByRaw("CASE WHEN scctcust.NOCUST IS NULL OR TRIM(CAST(scctcust.NOCUST AS CHAR)) = '' OR scctcust.NOCUST = '-' THEN 1 ELSE 0 END ASC")
+                    ->orderBy('scctcust.NOCUST', 'asc')
+                    ->orderBy('scctbill.FUrutan', 'asc')
+                    ->orderBy('sccttran.INSTALLMENT', 'asc')
+                    ->orderBy($columnName, $columnSortOrder)
+                    ->take($pageSize);
+            } else {
+                $recordsQuery
+                    ->orderBy($columnName, $columnSortOrder)
+                    ->orderBy('sccttran.urut', 'desc')
+                    ->skip($start)
+                    ->take($pageSize + 1);
+            }
 
-            $rowperpage = $rowperpage == "poll" ? $totalRecords : $rowperpage;
-            $records = (clone $query)
-                ->orderByRaw("CASE WHEN scctcust.NOCUST IS NULL OR TRIM(CAST(scctcust.NOCUST AS CHAR)) = '' OR scctcust.NOCUST = '-' THEN 1 ELSE 0 END ASC")
-                ->orderBy('scctcust.NOCUST', 'asc')
-                ->orderBy('scctbill.FUrutan', 'asc')
-                ->orderBy('sccttran.INSTALLMENT', 'asc')
-                ->orderBy($columnName, $columnSortOrder)
-                ->select($select)
-                ->skip($start)
-                ->take($rowperpage)
-                ->get();
+            $records = $recordsQuery->get();
+            $fetchedCount = $records->count();
+            $hasMore = !$isPoll && $fetchedCount > $pageSize;
+            if ($hasMore) {
+                $records = $records->take($pageSize)->values();
+            }
+
+            $pageCount = $records->count();
+            $totalRecordswithFilter = $isPoll
+                ? $pageCount
+                : $start + $pageCount + ($hasMore ? 1 : 0);
+            $totalRecords = $totalRecordswithFilter;
 
             if ($request->get("length") != "poll") {
                 $records = $records->map(function ($item) use ($metodeBayarMap) {

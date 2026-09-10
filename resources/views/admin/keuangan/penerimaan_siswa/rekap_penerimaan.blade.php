@@ -284,7 +284,7 @@
 @section('script')
     <script src="{{asset('main/libs/select2/select2.js')}}"></script>
     <script src="{{asset('main/libs/datatables-bs5/datatables-bootstrap5.js')}}"></script>
-    <script src="{{asset('js/datatableCustom/Datatable-0-4.js')}}?v=20260910-defer-load"></script>
+    <script src="{{asset('js/datatableCustom/Datatable-0-4.js')}}?v=20260910-paginate"></script>
     <script src="{{asset('main/libs/moment/moment.js')}}"></script>
     <script src="{{asset('main/libs/bootstrap-daterangepicker/bootstrap-daterangepicker.js')}}"></script>
 
@@ -311,7 +311,6 @@
             lengthMenu: [10, 25, 50, 75, 100],
             buttons: ['excel'],
             excelCurrencyTotal: true,
-            deferLoading: 0,
         };
 
         document.addEventListener("DOMContentLoaded", function () {
@@ -321,16 +320,6 @@
                     let filterForm = $(`#${dtOptions.formId}`);
                     filterForm.on('submit', function (e) {
                         e.preventDefault();
-                        const tanggal = ($('#tanggal-transaksi').val() || '').trim();
-                        const nis = ($('#filter\\[siswa\\]').val() || '').trim();
-                        const periodeMulaiVal = ($('#filter_periode_mulai').val() || '').trim();
-                        const periodeAkhirVal = ($('#filter_periode_akhir').val() || '').trim();
-                        if (!tanggal && !nis && !periodeMulaiVal && !periodeAkhirVal) {
-                            if (typeof warningAlert === 'function') {
-                                warningAlert('Silahkan isi Tanggal Transaksi atau filter lain terlebih dahulu.');
-                            }
-                            return;
-                        }
                         dataReFilter(dtOptions.tableId);
                     });
                     filterForm.on('reset', function (e) {
