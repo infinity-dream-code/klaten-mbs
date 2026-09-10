@@ -41,7 +41,7 @@
                 <h5 class="mb-0 me-2">{{($dataTitle??$mainTitle)}}</h5>
             </div>
             <div class="card-header-elements ms-auto">
-                <button type="button" class="btn btn-success" data-bs-toggle="modal"
+                <button type="button" class="btn btn-whatsapp" data-bs-toggle="modal"
                         data-bs-target="#modal-import" title="Buat Data">
                     <span class="ri-file-excel-2-line me-2"></span>
                     Import Data WA
@@ -49,43 +49,6 @@
             </div>
         </div>
 
-        <div class="card-body">
-            <form id="filterForm" class="d-none">
-                <fieldset class="form-fieldset">
-                    <h5>Filter</h5>
-                    <div class="row row-cols-lg-2 row-cols-1">
-                        <div class="col mb-5">
-                            <label class="form-label text-capitalize" for="filter[mode]">Mode</label>
-                            <select class="form-select" id="filter[mode]" name="filter[mode]" data-control="select2" data-placeholder="Pilih mode">
-                                <option value="all" {{ request('filter.mode') == 'all' ? 'selected' : '' }}>Semua</option>
-                                @isset($mode)
-                                    @foreach($mode as $item)
-                                        <option value="{{$item->id}}"
-                                            {{ request('filter.mode') == $item->id ? 'selected' : '' }}>
-                                            {{$item->unit}} - {{$item->mode}} {{$item->kelompok}}
-                                        </option>
-                                    @endforeach
-                                @else
-                                    <option>data kosong</option>
-                                @endisset
-                            </select>
-                        </div>
-                    </div>
-                    <div class="row">
-                        <div class="d-flex justify-content-center justify-content-md-end gap-4">
-                            <button type="reset" class="btn btn-secondary">
-                                <span class="ri-reset-left-line me-2"></span>
-                                Reset
-                            </button>
-                            <button type="submit" class="btn btn-primary">
-                                <span class="ri-search-line me-2"></span>
-                                Cari
-                            </button>
-                        </div>
-                    </div>
-                </fieldset>
-            </form>
-        </div>
         <div class="card-datatable table-responsive text-nowrap">
             <table class="table table-sm table-bordered table-hover"
                    id="main_table">
@@ -140,10 +103,12 @@
                             <li class="list-group-item list-group-timeline-danger">File harus berformat <span class="fw-bold">XLS/XLSX</span>.</li>
                             <li class="list-group-item list-group-timeline-danger">Ukuran file tidak boleh lebih dari <span class="fw-bold">1024KB/1MB</span>.</li>
                             <li class="list-group-item list-group-timeline-danger">Pastikan NIS telah terdaftar pada data siswa.</li>
-                            <li class="list-group-item list-group-timeline-danger">Kolom yang harus terisi: <span class="fw-bold">NIS, NAMA, NO WA</span>.</li>
+                            <li class="list-group-item list-group-timeline-danger">Kolom wajib: <span class="fw-bold">NIS, Nama, NO_WA</span>.</li>
+                            <li class="list-group-item list-group-timeline-danger">Kolom opsional: <span class="fw-bold">Unit, Kelas, Kelompok, Angkatan</span>.</li>
+                            <li class="list-group-item list-group-timeline-danger">Nomor WA akan diupdate ke data siswa berdasarkan NIS.</li>
                             <li class="list-group-item list-group-timeline-danger">Contoh file yang dapat diproses untuk import:
                                 <a class="btn btn-sm btn-outline-primary fw-bolder"
-                                   href="{{ asset('data_siswa.xlsx') }}"
+                                   href="{{ asset('TEMPLATE MENU UPDATE NO WA.xlsx') }}"
                                    download>
                                     <i class="ri ri-file-excel-line me-2"></i>Contoh File
                                 </a>
@@ -197,18 +162,6 @@
                                 Anda yakin ingin memperbarui nomor WA siswa yang telah diimport?
                             </div>
                         </div>
-                        {{--                        <div class="row mb-3">--}}
-                        {{--                            <div class="col">--}}
-                        {{--                                <label class="form-label" for="metode">Metode Penyimpanan</label>--}}
-                        {{--                                <select class="form-select" id="metode" name="metode" required>--}}
-                        {{--                                    <option value="1">Simpan data siswa baru</option>--}}
-                        {{--                                    <option value="2">Update data siswa dengan nis duplikat</option>--}}
-                        {{--                                    <option value="3"> Simpan data siswa baru & Update data siswa dengan nis duplikat--}}
-                        {{--                                    </option>--}}
-                        {{--                                </select>--}}
-                        {{--                            </div>--}}
-                        {{--                        </div>--}}
-                        <input type="hidden" id="delete_id" name="delete_id" value="12">
                     </div>
                     <div class="modal-footer ">
                         <div class="w-100">
@@ -245,7 +198,7 @@
 
         let dtOptions = {
             tableId: 'main_table',
-            formId: 'filterForm',
+            formId: null,
             columnUrl: '{{($columnsUrl??null)}}',
             dataUrl: '{{($datasUrl??null)}}',
             dataColumns: [],
@@ -394,12 +347,21 @@
                             return response.json();
                         })
                         .then(data => {
+                            if (typeof Swal !== 'undefined') {
+                                Swal.close();
+                            }
                             document.getElementById(formId).reset();
+                            if (formId === 'formImport' && resetFilePond) {
+                                resetFilePond('file');
+                            }
                             successAlert(data.message);
                             dataReload("main_table");
                             document.querySelector(`#${formId} [data-bs-dismiss="modal"]`)?.click();
                         })
                         .catch(error => {
+                            if (typeof Swal !== 'undefined') {
+                                Swal.close();
+                            }
                             if (error.status === 422) {
                                 const errors = error.error.error || error.error.errors;
                                 errorAlert(error.error.message);
