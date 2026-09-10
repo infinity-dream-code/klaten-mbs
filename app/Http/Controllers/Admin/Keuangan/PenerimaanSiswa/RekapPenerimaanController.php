@@ -101,11 +101,7 @@ class RekapPenerimaanController extends Controller
                     ->on('scctbill.CUSTID', '=', 'sccttran.CUSTID');
             })
             ->leftJoin('scctcust', 'scctcust.CUSTID', '=', 'sccttran.CUSTID')
-            ->where(function ($q) {
-                $q->whereNull('sccttran.isreversal')
-                    ->orWhere('sccttran.isreversal', 0)
-                    ->orWhere('sccttran.isreversal', '0');
-            })
+            ->tap(fn ($query) => sccttran::applyNotReversedScope($query))
             ->whereRaw("UPPER(TRIM(COALESCE(sccttran.METODE, ''))) <> 'TOP UP'");
     }
 

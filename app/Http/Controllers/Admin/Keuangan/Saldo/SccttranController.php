@@ -21,13 +21,10 @@ class SccttranController extends Controller
         $metodeColumn = $tablePrefix . 'METODE';
         $isReversalColumn = $tablePrefix . 'isreversal';
 
-        return $query
-            ->whereRaw("UPPER(TRIM(COALESCE({$metodeColumn}, ''))) = 'TOP UP'")
-            ->where(function ($q) use ($isReversalColumn) {
-                $q->whereNull($isReversalColumn)
-                    ->orWhere($isReversalColumn, 0)
-                    ->orWhere($isReversalColumn, '0');
-            });
+        $query = $query
+            ->whereRaw("UPPER(TRIM(COALESCE({$metodeColumn}, ''))) = 'TOP UP'");
+
+        return sccttran::applyNotReversedScope($query, $isReversalColumn);
     }
 
     public function __construct()

@@ -564,11 +564,7 @@ class DataPenerimaanController extends Controller
     private function notReversedTranScope(): \Closure
     {
         return function ($query) {
-            $query->where(function ($q) {
-                $q->whereNull('sccttran.isreversal')
-                    ->orWhere('sccttran.isreversal', 0)
-                    ->orWhere('sccttran.isreversal', '0');
-            });
+            sccttran::applyNotReversedScope($query);
         };
     }
 
