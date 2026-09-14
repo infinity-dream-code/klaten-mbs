@@ -10,7 +10,6 @@ use App\Models\mst_thn_aka;
 use App\Models\scctcust;
 use App\Models\ValidationMessage;
 use App\Support\InputSiswaProcedure;
-use App\Support\SchoolScope;
 use Carbon\Carbon;
 use Exception;
 use Illuminate\Http\Request;
@@ -28,6 +27,9 @@ class ExportImportDataController extends Controller
     public string $dataTitle = 'Export Import Data';
     public string $cacheKey = 'import_data_siswa';
 
+    /** @var array<string, array{0: ?mst_sekolah, 1: ?mst_kelas}> */
+    private array $sekolahKelasCache = [];
+
     public function index()
     {
         $data['title'] = $this->title;
@@ -35,12 +37,6 @@ class ExportImportDataController extends Controller
         $data['dataTitle'] = $this->dataTitle;
         $data['columnsUrl'] = route('admin.master-data.export-import-data.get-column');
         $data['datasUrl'] = route('admin.master-data.export-import-data.get-data');
-        $schoolCode = SchoolScope::codeFromUser();
-        $data['sekolah'] = mst_sekolah::query()
-            ->select(['CODE01', 'DESC01'])
-            ->when($schoolCode, fn ($q) => $q->where('CODE01', $schoolCode))
-            ->orderBy('DESC01')
-            ->get();
 
         return view('admin.master_data.export_import_data.index', $data);
     }
@@ -212,9 +208,6 @@ class ExportImportDataController extends Controller
         $rules = [
             'metode' => ['required', 'in:1,2,3,4'],
         ];
-        if (in_array($request->metode, ['1', '2'], true)) {
-            $rules['sekolah'] = ['required', 'string'];
-        }
 
         $request->validate(
             $rules,
@@ -225,14 +218,6 @@ class ExportImportDataController extends Controller
         $data = Cache::get($this->cacheKey);
         if (is_null($data) || (is_array($data) && empty($data))) {
             return response()->json(['message' => 'Tidak ada data yang dapat diproses, silahkan upload file terlebih dahulu'], 422);
-        }
-
-        $sekolah = null;
-        if (in_array($request->metode, ['1', '2'], true)) {
-            $sekolah = mst_sekolah::where('CODE01', $request->sekolah)->first();
-            if (!$sekolah) {
-                return response()->json(['message' => 'Sekolah tidak ditemukan, silahkan pilih sekolah yang valid'], 422);
-            }
         }
 
         try {
@@ -264,9 +249,9 @@ class ExportImportDataController extends Controller
                     }
 
                     $thnAka = mst_thn_aka::where('thn_aka', $item['angkatan'])->first();
-                    $kelas = mst_kelas::findForImport($item['unit'], $item['kelas'], $item['kelompok']);
+                    [$sekolah, $kelas] = $this->resolveOrCreateSekolahAndKelas($item);
 
-                    if (!$thnAka || !$kelas) {
+                    if (!$thnAka || !$kelas || !$sekolah) {
                         DB::connection('DATA_MYSQL')->rollBack();
 
                         return response()->json([
@@ -287,6 +272,8 @@ class ExportImportDataController extends Controller
                         $item['gender'] ?? null,
                         $this->resolveOrtuForDb($item),
                     );
+
+                    $this->syncScctcustKelas($nis, $sekolah, $kelas, $item, $thnAka);
 
                     $saved++;
                 }
@@ -309,9 +296,9 @@ class ExportImportDataController extends Controller
 
                     $existingCust = scctcust::where('NUM2ND', $item['nodaftar'])->first();
                     $thnAka = mst_thn_aka::where('thn_aka', $item['angkatan'])->first();
-                    $kelas = mst_kelas::findForImport($item['unit'], $item['kelas'], $item['kelompok']);
+                    [$sekolah, $kelas] = $this->resolveOrCreateSekolahAndKelas($item);
 
-                    if (!$thnAka || !$kelas) {
+                    if (!$thnAka || !$kelas || !$sekolah) {
                         Log::warning('export_import_data.validateData.missing_reference', [
                             'nis' => $item['nis'] ?? null,
                             'nodaftar' => $item['nodaftar'] ?? null,
@@ -365,10 +352,12 @@ class ExportImportDataController extends Controller
                     }
 
                     $existingCust = scctcust::where('NOCUST', $item['nis'])->first();
-                    $kelas = mst_kelas::findForImport($item['unit'], $item['kelas'], $item['kelompok']);
+                    [$sekolah, $kelas] = $this->resolveOrCreateSekolahAndKelas($item);
 
-                    if ($existingCust && $kelas) {
+                    if ($existingCust && $kelas && $sekolah) {
                         $existingCust->update([
+                            'CODE01' => $sekolah->CODE01,
+                            'DESC01' => $sekolah->DESC01,
                             'CODE02' => $kelas->unit,
                             'DESC02' => $kelas->jenjang,
                             'CODE03' => $kelas->id,
@@ -462,37 +451,49 @@ class ExportImportDataController extends Controller
         return $second !== '' ? $second : null;
     }
 
-    private function resolveSekolahForImport(?string $unit, ?mst_kelas $kelas): ?mst_sekolah
+    private function resolveOrCreateSekolahAndKelas(array $item): array
     {
-        $unit = trim((string) $unit);
+        $unit = trim((string) ($item['unit'] ?? ''));
+        $jenjang = trim((string) ($item['kelas'] ?? ''));
+        $kelompok = trim((string) ($item['kelompok'] ?? ''));
 
-        if ($unit !== '') {
-            $byUnit = mst_sekolah::query()
-                ->where(function ($query) use ($unit) {
-                    $query->where('DESC01', 'like', '%' . $unit . '%')
-                        ->orWhere('CODE01', $unit)
-                        ->orWhereRaw('UPPER(TRIM(DESC01)) = ?', [strtoupper($unit)]);
-                })
-                ->first();
-
-            if ($byUnit) {
-                return $byUnit;
-            }
+        if ($unit === '' || $jenjang === '' || $kelompok === '') {
+            return [null, null];
         }
 
-        if (!$kelas) {
-            return null;
+        $cacheKey = strtoupper($unit . '|' . $jenjang . '|' . $kelompok);
+        if (array_key_exists($cacheKey, $this->sekolahKelasCache)) {
+            return $this->sekolahKelasCache[$cacheKey];
         }
 
-        $kelasUnit = trim((string) ($kelas->unit ?? ''));
+        $sekolah = mst_sekolah::firstOrCreateByUnitName($unit);
+        $kelas = mst_kelas::firstOrCreateForImport($unit, $jenjang, $kelompok, (string) $sekolah->CODE01);
 
-        return mst_sekolah::query()
-            ->where(function ($query) use ($kelasUnit) {
-                $query->where('DESC01', 'like', '%' . $kelasUnit . '%')
-                    ->orWhere('CODE01', $kelasUnit)
-                    ->orWhereRaw('UPPER(TRIM(DESC01)) = ?', [strtoupper($kelasUnit)]);
-            })
-            ->first();
+        return $this->sekolahKelasCache[$cacheKey] = [$sekolah, $kelas];
+    }
+
+    private function syncScctcustKelas(
+        string $nis,
+        mst_sekolah $sekolah,
+        mst_kelas $kelas,
+        array $item,
+        mst_thn_aka $thnAka,
+    ): void {
+        $siswa = scctcust::where('NOCUST', $nis)->first();
+        if (!$siswa) {
+            scctcust::create($this->buildScctcustPayload($item, $sekolah, $kelas, $thnAka));
+
+            return;
+        }
+
+        $siswa->update([
+            'CODE01' => $sekolah->CODE01,
+            'DESC01' => $sekolah->DESC01,
+            'CODE02' => $kelas->unit,
+            'DESC02' => $kelas->jenjang,
+            'CODE03' => $kelas->id,
+            'DESC03' => $kelas->kelas,
+        ]);
     }
 
     private function buildScctcustPayload(

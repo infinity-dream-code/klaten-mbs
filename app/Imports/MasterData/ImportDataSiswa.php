@@ -121,12 +121,14 @@ class ImportDataSiswa implements WithMultipleSheets, ToCollection, WithHeadingRo
                 $rowData['kelompok'],
             );
 
-            if (!$matchedKelas) {
+            if ($rowData['unit'] === '' || $rowData['kelas'] === '' || $rowData['kelompok'] === '') {
                 $rowData['status'] = 0;
+                $status_ket = $this->appendKet($status_ket, 'Unit, Kelas, dan Kelompok wajib diisi');
+            } elseif (!$matchedKelas) {
                 $status_ket = $this->appendKet(
                     $status_ket,
                     sprintf(
-                        'Kelas tidak ditemukan (Unit: %s, Kelas: %s, Kelompok: %s). Sesuaikan dengan Master Kelas.',
+                        'Unit/kelas belum ada (Unit: %s, Kelas: %s, Kelompok: %s). Akan dibuat otomatis saat simpan.',
                         $rowData['unit'],
                         $rowData['kelas'],
                         $rowData['kelompok'],
