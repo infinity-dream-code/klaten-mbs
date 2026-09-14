@@ -18,7 +18,6 @@ class mst_kelas extends Model
     public $incrementing = false;
 
     protected $fillable = [
-        "id",
         "kelas",
         "jenjang",
         "unit",
@@ -56,33 +55,11 @@ class mst_kelas extends Model
      * Excel UNIT   = mst_kelas.unit
      * Excel KELAS  = mst_kelas.jenjang (7 / VII)
      * Excel KELOMPOK = mst_kelas.kelas (A / B / A1)
-     * mst_kelas.kelompok = mst_sekolah.CODE01 (dibuat otomatis jika belum ada).
+     * Sekolah (mst_sekolah) dipilih terpisah saat Simpan Data.
      */
     public static function findForImport(?string $unit, mixed $jenjang, ?string $kelompok): ?self
     {
         return self::matchFromCollection(self::query()->get(), $unit, $jenjang, $kelompok);
-    }
-
-    public static function firstOrCreateForImport(?string $unit, mixed $jenjang, ?string $kelompok, string $sekolahCode): self
-    {
-        $unit = trim((string) $unit);
-        $jenjangText = trim((string) $jenjang);
-        $kelasNama = trim((string) $kelompok);
-
-        $found = self::findForImport($unit, $jenjangText, $kelasNama);
-        if ($found) {
-            return $found;
-        }
-
-        $nextId = ((int) static::query()->max('id')) + 1;
-
-        return static::create([
-            'id' => $nextId,
-            'unit' => $unit,
-            'jenjang' => $jenjangText,
-            'kelas' => $kelasNama,
-            'kelompok' => $sekolahCode,
-        ]);
     }
 
     /**

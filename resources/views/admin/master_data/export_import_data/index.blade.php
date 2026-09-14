@@ -104,7 +104,6 @@
                             <li class="list-group-item list-group-timeline-danger">Ukuran file tidak boleh lebih dari <span class="fw-bold">1024KB/1MB</span>.</li>
                             <li class="list-group-item list-group-timeline-danger">Kolom wajib: <span class="fw-bold">NIS, Nama, Unit, Kelas, Kelompok, Angkatan</span>.</li>
                             <li class="list-group-item list-group-timeline-danger">Kolom opsional: <span class="fw-bold">Gender, Alamat, Ortu</span> (bukan Ayah/Ibu).</li>
-                            <li class="list-group-item list-group-timeline-danger">Jika Unit/Kelas belum ada di master, sistem akan membuatnya otomatis ke Master Sekolah dan Master Kelas.</li>
                             <li class="list-group-item list-group-timeline-danger">Contoh file yang dapat diproses untuk import:
                                 <a class="btn btn-sm btn-outline-primary fw-bolder"
                                    href="{{asset('TEMPLATE MENU UPLOAD DATA SISWA.xlsx')}}"
@@ -159,10 +158,24 @@
                             <h3>Simpan Data Siswa?</h3>
                             <div class="">
                                 Anda yakin ingin menyimpan data siswa yang telah diimport?
-                                Unit/kelas yang belum ada akan dibuat otomatis ke Master Sekolah dan Master Kelas, lalu disimpan ke data siswa.
                             </div>
                         </div>
                         <fieldset class="form-fieldset">
+                            <div class="row mb-3">
+                                <div class="col">
+                                    <label class="form-label" for="sekolah">Sekolah <span class="text-danger">*</span></label>
+                                    <select class="form-select" id="sekolah" name="sekolah"
+                                            data-control="select2"
+                                            data-placeholder="Pilih Sekolah">
+                                        <option value="" disabled selected>Pilih Sekolah</option>
+                                        @isset($sekolah)
+                                            @foreach($sekolah as $item)
+                                                <option value="{{ $item->CODE01 }}">{{ $item->DESC01 }}</option>
+                                            @endforeach
+                                        @endisset
+                                    </select>
+                                </div>
+                            </div>
                             <div class="row mb-3">
                                 <div class="col">
                                     <label class="form-label" for="metode">Metode Penyimpanan <span class="text-danger">*</span></label>
@@ -364,6 +377,13 @@
                     });
                 });
             }
+
+            document.getElementById('metode')?.addEventListener('change', function () {
+                const sekolahField = document.getElementById('sekolah');
+                if (!sekolahField) return;
+                const needsSekolah = ['1', '2'].includes(this.value);
+                sekolahField.required = needsSekolah;
+            });
 
             document.querySelectorAll(".mainForm").forEach(form => {
                 form.addEventListener("submit", function (e) {
