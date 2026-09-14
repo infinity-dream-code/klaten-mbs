@@ -18,6 +18,7 @@ Route::prefix("admin")
     ->middleware(["auth", "check.roles:admin"])
     ->group(function () {
         Route::get("/", [AdminController::class, "index"])->name("index");
+        Route::get("keep-alive", \App\Http\Controllers\Admin\KeepAliveController::class)->name("keep-alive");
 
         Route::prefix("master-data")->name("master-data.")->group(function () {
             Route::get("get-logo", function (\Illuminate\Http\Request $request) {

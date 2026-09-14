@@ -8,7 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Symfony\Component\HttpFoundation\Response;
 
-class CheckSession
+class RestorePersistentLogin
 {
     public function handle(Request $request, Closure $next): Response
     {
@@ -16,12 +16,11 @@ class CheckSession
             $user = PersistentLogin::userFromRequest($request);
             if ($user) {
                 Auth::login($user, false);
-                PersistentLogin::queue($user);
             }
         }
 
-        if (!Auth::check()) {
-            return redirect()->route('login');
+        if (Auth::check() && !$request->routeIs('logout')) {
+            PersistentLogin::queue(Auth::user());
         }
 
         return $next($request);

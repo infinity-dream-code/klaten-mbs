@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\CyberKey;
+use App\Support\PersistentLogin;
 use Illuminate\Foundation\Auth\AuthenticatesUsers;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -94,6 +95,7 @@ class LoginController extends Controller
         }
 
         $this->guard()->login($user);
+        PersistentLogin::queue($user);
         session()->forget(["auth_cf_fallback", "auth_math_answer"]);
 
         return true;
@@ -321,6 +323,7 @@ SVG;
     public function logout(Request $request): RedirectResponse
     {
         Auth::logout();
+        PersistentLogin::forget();
 
         $request->session()->invalidate();
 
