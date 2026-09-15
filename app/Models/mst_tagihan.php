@@ -66,6 +66,41 @@ class mst_tagihan extends Model
         Cache::forget('mst_tagihan_installment_map');
     }
 
+    /**
+     * Nama tagihan untuk filter: gabungan master + BILLNM yang sudah ada di scctbill.
+     * Tagihan seperti TABUNGAN yang hanya ada di bill tetap tampil.
+     */
+    public static function dropdownNames()
+    {
+        $names = [];
+
+        foreach (static::query()->whereNotNull('tagihan')->where('tagihan', '!=', '')->pluck('tagihan') as $name) {
+            $trimmed = trim((string) $name);
+            if ($trimmed === '') {
+                continue;
+            }
+            $names[mb_strtoupper($trimmed)] = $trimmed;
+        }
+
+        foreach (
+            scctbill::query()
+                ->whereNotNull('BILLNM')
+                ->where('BILLNM', '!=', '')
+                ->distinct()
+                ->pluck('BILLNM') as $name
+        ) {
+            $trimmed = trim((string) $name);
+            if ($trimmed === '') {
+                continue;
+            }
+            $names[mb_strtoupper($trimmed)] = $trimmed;
+        }
+
+        natcasesort($names);
+
+        return collect(array_values($names))->map(fn ($tagihan) => (object) ['tagihan' => $tagihan]);
+    }
+
     protected static function booted(): void
     {
         static::saved(fn () => static::flushInstallmentCache());

@@ -68,7 +68,7 @@ class DataPenerimaanController extends Controller
         $data['mainTitle'] = $this->mainTitle;
         $data['columnsUrl'] = $this->columnsUrl();
         $data['datasUrl'] = $this->datasUrl();
-        $data['post'] = mst_tagihan::select(['tagihan'])->orderBy('urut')->get();
+        $data['post'] = mst_tagihan::dropdownNames();
         $data['thn_aka'] = mst_thn_aka::getMstThnAkaAttributes();
         $data['kelas'] = mst_kelas::getMstKelasAttributes($this->sekolah);
         $data['tanda_tangan'] = User::getTandaTanganBase64();
