@@ -362,11 +362,11 @@
             const splitByPaidStatus = newData.reduce((acc, item) => {
                 const paidSt = Number(item.PAIDST ?? 0);
                 const billPaid = Number(item.BILLPAID ?? 0);
-                const installmentPaid = Number(item.isINSTALLABLE ?? 0);
+                const installment = Number(item.INSTALLMENT ?? 0);
 
-                if (paidSt === 1) {
+                if (paidSt === 1 || billPaid > 0 || installment > 0) {
                     acc.paid.push(item);
-                } else if (billPaid === 0 && installmentPaid === 0) {
+                } else {
                     acc.unpaid.push(item);
                 }
                 return acc;
