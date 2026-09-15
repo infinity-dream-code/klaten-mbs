@@ -377,7 +377,7 @@
         });
     })
 </script>
-<script src="{{ asset('js/session-keepalive.js') }}?v=20260915-auth2"></script>
+<script src="{{ asset('js/session-keepalive.js') }}?v=20260915-auth3"></script>
 
 @hasSection('errorInputHelper')
     <script src="{{asset('js/helper/errorInputHelper.min.js')}}"></script>

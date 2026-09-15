@@ -101,25 +101,36 @@
         return keepAliveInFlight;
     }
 
-    function withCsrfHeaders(init) {
+    function withCsrfHeaders(input, init) {
         const next = Object.assign({}, init || {});
         next.credentials = next.credentials || 'same-origin';
-        const headers = new Headers(next.headers || {});
+
+        const headers = new Headers();
+        if (typeof Request !== 'undefined' && input instanceof Request) {
+            input.headers.forEach(function (value, key) {
+                headers.set(key, value);
+            });
+        }
+        if (next.headers) {
+            new Headers(next.headers).forEach(function (value, key) {
+                headers.set(key, value);
+            });
+        }
+
         const token = currentToken();
         if (token && !headers.has('X-CSRF-TOKEN') && !headers.has('X-XSRF-TOKEN')) {
             headers.set('X-CSRF-TOKEN', token);
         }
+
         next.headers = headers;
         return next;
     }
 
-    function retryInit(init, token) {
-        const next = withCsrfHeaders(init);
-        const headers = new Headers(next.headers || {});
+    function retryInit(input, init, token) {
+        const next = withCsrfHeaders(input, init);
         if (token) {
-            headers.set('X-CSRF-TOKEN', token);
+            next.headers.set('X-CSRF-TOKEN', token);
         }
-        next.headers = headers;
 
         if (next.body instanceof FormData && token) {
             next.body.set('_token', token);
@@ -144,7 +155,7 @@
 
         const canClone = typeof Request !== 'undefined' && input instanceof Request;
         const firstInput = canClone ? input.clone() : input;
-        const firstInit = withCsrfHeaders(init);
+        const firstInit = withCsrfHeaders(input, init);
 
         return nativeFetch(firstInput, firstInit).then(function (res) {
             if (!shouldRetryStatus(res.status)) {
@@ -153,7 +164,7 @@
 
             return keepAlive().then(function (token) {
                 const secondInput = canClone ? input.clone() : input;
-                return nativeFetch(secondInput, retryInit(init, token || currentToken()));
+                return nativeFetch(secondInput, retryInit(input, init, token || currentToken()));
             });
         });
     };

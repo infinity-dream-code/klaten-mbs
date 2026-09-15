@@ -157,8 +157,8 @@ class EditManualController extends Controller
     public function editTagihan(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'siswa' => ['required', 'string'],
-            'tagihan' => ['required', 'string'],
+            'siswa' => ['required'],
+            'tagihan' => ['required'],
             'nominal' => ['required', 'numeric', 'min:1'],
         ], ValidationMessage::messages(),
             ValidationMessage::attributes());
@@ -191,7 +191,7 @@ class EditManualController extends Controller
         }
 
         $billPaid = (int) ($tagihan->BILLPAID ?? 0);
-        if ($billPaid > 0 || (int) ($tagihan->isINSTALLABLE ?? 0) > 0) {
+        if ($billPaid > 0 || (int) ($tagihan->INSTALLMENT ?? 0) > 0) {
             return response()->json(['message' => 'Tagihan yang sudah pernah dibayar (cicilan) tidak bisa diedit di sini!'], 422);
         }
 

@@ -336,11 +336,11 @@
                 return;
             }
 
-            const formData = new FormData();
-            formData.append('siswa', selectedSiswa.CUSTID);
-            formData.append('tagihan', selectedTagihan.data()[0].AA);
-            formData.append('nominal', nominal);
-            formData.append('_token', csrfToken);
+            const body = new URLSearchParams();
+            body.set('siswa', String(selectedSiswa.CUSTID));
+            body.set('tagihan', String(selectedTagihan.data()[0].AA));
+            body.set('nominal', String(nominal));
+            body.set('_token', csrfToken);
 
             loadingAlert('Mengedit data...');
             const request = new Request(
@@ -351,8 +351,9 @@
                         'X-CSRF-TOKEN': csrfToken,
                         'X-Requested-With': 'XMLHttpRequest',
                         'Accept': 'application/json',
+                        'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
                     },
-                    body: formData
+                    body: body.toString()
                 });
 
             let result = await submitForm(request);
