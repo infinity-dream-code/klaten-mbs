@@ -67,16 +67,22 @@ class DataTagihanController extends Controller
     }
 
     /**
-     * Tagihan belum lunas — termasuk cicilan (sudah terbayar sebagian, PAIDST masih 0).
+     * Tagihan belum lunas. Yang sudah terbayar penuh (PAIDST=1 / sisa 0 / BILLPAID >= BILLAM) disembunyikan.
+     * Cicilan (sudah bayar sebagian, masih ada sisa) tetap tampil.
      */
     private function applyBelumLunasScope($query, string $billTable = 'scctbill'): void
     {
         $sisaExpr = "CAST(COALESCE({$billTable}.PAYMENTLEFT, {$billTable}.BILLAM - COALESCE({$billTable}.BILLPAID, 0), 0) AS SIGNED)";
+        $billAm = "CAST(COALESCE({$billTable}.BILLAM, 0) AS SIGNED)";
+        $billPaid = "CAST(COALESCE({$billTable}.BILLPAID, 0) AS SIGNED)";
 
-        $query->where(function ($q) use ($billTable, $sisaExpr) {
-            $q->where("{$billTable}.PAIDST", 0)
-                ->orWhereNull("{$billTable}.PAIDST")
-                ->orWhereRaw("{$sisaExpr} > 0");
+        $query->where(function ($q) use ($billTable, $sisaExpr, $billAm, $billPaid) {
+            $q->where(function ($st) use ($billTable) {
+                $st->where("{$billTable}.PAIDST", 0)
+                    ->orWhereNull("{$billTable}.PAIDST");
+            })
+                ->whereRaw("{$sisaExpr} > 0")
+                ->whereRaw("{$billPaid} < {$billAm}");
         });
     }
 
@@ -682,18 +688,18 @@ class DataTagihanController extends Controller
         $cacheFilter = array_merge($filter, ['_scope' => $this->cacheScopeSuffix()]);
 
         $totalRecordswithFilter = Cache::remember(
-            CacheHandler::cacheKey($this->cacheKey, 'total_records_with_filter', $cacheFilter, $searchValue),
+            CacheHandler::cacheKey($this->cacheKey, 'total_records_unpaid_v2', $cacheFilter, $searchValue),
             now()->addMinutes(10),
             fn() => (clone $query)->count()
         );
 
         $recordsPeople = (int) Cache::remember(
-            CacheHandler::cacheKey($this->cacheKey, 'total_people_with_filter', $cacheFilter, $searchValue),
+            CacheHandler::cacheKey($this->cacheKey, 'total_people_unpaid_v2', $cacheFilter, $searchValue),
             now()->addMinutes(10),
             fn () => $this->countDistinctPeople($query)
         );
 
-        $cacheKey = CacheHandler::cacheKey($this->cacheKey, 'sum_tagihan', $cacheFilter, $searchValue);
+        $cacheKey = CacheHandler::cacheKey($this->cacheKey, 'sum_tagihan_unpaid_v2', $cacheFilter, $searchValue);
 
         $totalTagihan =
             Cache::remember(
@@ -1035,7 +1041,7 @@ class DataTagihanController extends Controller
         $scopeKey = $this->cacheScopeSuffix();
 
         return Cache::remember(
-            "{$this->cacheKey}:total_all_data:{$scopeKey}",
+            "{$this->cacheKey}:total_unpaid_v2:{$scopeKey}",
             now()->addMinutes(10),
             function () {
                 $query = scctbill::join('scctcust', 'scctcust.CUSTID', '=', 'scctbill.CUSTID');
