@@ -49,6 +49,8 @@
             rowId: 'AA',
             buttons: ['excel', 'pdf', 'print'],
             excelCurrencyTotal: true,
+            excelIncludeTransLog: true,
+            excelMaxPeople: 1000,
             pdfOrientation: 'landscape',
             pdfPageSize: 'A3',
             pdfMargins: [10, 14, 10, 14],

@@ -687,6 +687,12 @@ class DataTagihanController extends Controller
             fn() => (clone $query)->count()
         );
 
+        $recordsPeople = (int) Cache::remember(
+            CacheHandler::cacheKey($this->cacheKey, 'total_people_with_filter', $cacheFilter, $searchValue),
+            now()->addMinutes(10),
+            fn () => $this->countDistinctPeople($query)
+        );
+
         $cacheKey = CacheHandler::cacheKey($this->cacheKey, 'sum_tagihan', $cacheFilter, $searchValue);
 
         $totalTagihan =
@@ -799,10 +805,20 @@ class DataTagihanController extends Controller
             })
             ->values()
             ->all();
+
+        if ($request->boolean('include_logs')) {
+            $logsByBill = sccttran::logsGroupedByBillId(array_column($records, 'AA'));
+            foreach ($records as &$row) {
+                $row['TRX_LOGS'] = $logsByBill[(string) ($row['AA'] ?? '')] ?? [];
+            }
+            unset($row);
+        }
+
         $response = array(
             "draw" => intval($draw),
             "recordsTotal" => $totalRecords ?? 0,
             "recordsFiltered" => $totalRecordswithFilter ?? 0,
+            "recordsPeople" => $recordsPeople,
             "data" => $records ?? [],
             'totals' => [
                 'tagihan' => ['location' => 12, 'value' => $totalTagihan, 'columnType' => 'currency'],
@@ -1034,6 +1050,18 @@ class DataTagihanController extends Controller
                 return $query->count();
             }
         );
+    }
+
+    private function countDistinctPeople($query): int
+    {
+        $q = clone $query;
+        $q->getQuery()->columns = null;
+        $q->getQuery()->orders = null;
+        $q->getQuery()->limit = null;
+        $q->getQuery()->offset = null;
+        $q->getQuery()->groups = null;
+
+        return (int) $q->selectRaw('COUNT(DISTINCT scctcust.CUSTID) as people_count')->value('people_count');
     }
 
     private function resolveSelectedBillNames(Request $request): array

@@ -344,6 +344,13 @@ class DataPenerimaanController extends Controller
                 fn() => (clone $query)->count('scctbill.AA')
             );
 
+        $peopleCacheKey = CacheHandler::cacheKey($this->cacheKey, 'data_tagihan_lunas_people_count', $filter, $searchValue ?? '');
+        $recordsPeople = (int) Cache::remember(
+            $peopleCacheKey,
+            now()->addMinutes(10),
+            fn () => $this->countDistinctPeople($query)
+        );
+
         $totalNominalKey = CacheHandler::cacheKey($this->cacheKey, 'data_tagihan_lunas_bill_sum', $filter, $searchValue ?? '');
         $totalNominal = (int) Cache::remember(
             $totalNominalKey,
@@ -379,14 +386,26 @@ class DataPenerimaanController extends Controller
                 $item->NOCUST = $item->nocust;
                 $item->NMCUST = $item->nmcust;
                 $item->BILL_TRANSNO = $item->TRANSNO ?? null;
+                $item->TRX_LOGS = [];
 
                 return $item;
-            })->toArray();
+            });
+
+        if ($request->boolean('include_logs')) {
+            $logsByBill = sccttran::logsGroupedByBillId($records->pluck('AA')->all());
+            $records = $records->map(function ($item) use ($logsByBill) {
+                $item->TRX_LOGS = $logsByBill[(string) $item->AA] ?? [];
+                return $item;
+            });
+        }
+
+        $records = $records->toArray();
 
         $response = array(
             "draw" => intval($draw),
             "recordsTotal" => $totalRecords ?? 0,
             "recordsFiltered" => $totalRecordswithFilter ?? 0,
+            "recordsPeople" => $recordsPeople,
             "data" => $records ?? [],
             "totals" => [
                 "billam" => [
@@ -397,6 +416,18 @@ class DataPenerimaanController extends Controller
             ],
         );
         return response()->json($response);
+    }
+
+    private function countDistinctPeople($query): int
+    {
+        $q = clone $query;
+        $q->getQuery()->columns = null;
+        $q->getQuery()->orders = null;
+        $q->getQuery()->limit = null;
+        $q->getQuery()->offset = null;
+        $q->getQuery()->groups = null;
+
+        return (int) $q->selectRaw('COUNT(DISTINCT scctcust.CUSTID) as people_count')->value('people_count');
     }
 
     public function getTransLog($id, Request $request)

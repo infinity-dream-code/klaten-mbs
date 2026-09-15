@@ -336,6 +336,12 @@ function appendExcelCurrencyTotalRow(xlsx, sheet, dataColumns, options = {}) {
         for (let r = 1; r < rows.length; r++) {
             const rowEl = rows[r];
             const rowNum = rowEl.getAttribute('r') || String(r + 1);
+            const firstCol = getExcelColumnName(0);
+            const firstCell = findExcelCellInRow(rowEl, firstCol, rowNum);
+            const firstVal = String(getExcelCellValue(firstCell, xlsx) || '').trim();
+            if (firstVal === '' || firstVal.toUpperCase() === 'RIWAYAT' || firstVal.toUpperCase() === 'TOTAL') {
+                continue;
+            }
             currencyIndexes.forEach((idx) => {
                 const colName = getExcelColumnName(idx);
                 const cell = findExcelCellInRow(rowEl, colName, rowNum);
@@ -582,45 +588,65 @@ function formatTargetColumn(xlsx, col) {
 }
 
 
-function newexportaction(e, dt, button, config) {
+function newexportaction(e, dt, button, config, options = {}) {
     let self = this;
     let oldStart = dt.settings()[0]._iDisplayStart;
     let maxLength = dt.settings()[0]._iRecordsDisplay;
-    if (maxLength > 1500) {
+    const isExcel = button[0].className.indexOf('buttons-excel') >= 0;
+    const json = typeof dt.ajax.json === 'function' ? (dt.ajax.json() || {}) : {};
+    const people = Number(json.recordsPeople ?? 0);
+    const excelMaxPeople = Number(options.excelMaxPeople || 0);
+
+    if (isExcel && excelMaxPeople > 0 && people > excelMaxPeople) {
         e.preventDefault();
-        warningAlert('Data terlalu banyak! <hr>pastikan data yang diexport kurang dari 1500 baris')
-    } else {
-        dt.one('preXhr', function (e, s, data) {
-            data.start = 0;
-            data.length = maxLength;
-            dt.one('preDraw', function (e, settings) {
-                if (button[0].className.indexOf('buttons-copy') >= 0) {
-                    $.fn.dataTable.ext.buttons.copyHtml5.action.call(self, e, dt, button, config);
-                } else if (button[0].className.indexOf('buttons-excel') >= 0) {
-                    $.fn.dataTable.ext.buttons.excelHtml5.available(dt, config) ?
-                        $.fn.dataTable.ext.buttons.excelHtml5.action.call(self, e, dt, button, config) :
-                        $.fn.dataTable.ext.buttons.excelFlash.action.call(self, e, dt, button, config);
-                } else if (button[0].className.indexOf('buttons-csv') >= 0) {
-                    $.fn.dataTable.ext.buttons.csvHtml5.available(dt, config) ?
-                        $.fn.dataTable.ext.buttons.csvHtml5.action.call(self, e, dt, button, config) :
-                        $.fn.dataTable.ext.buttons.csvFlash.action.call(self, e, dt, button, config);
-                } else if (button[0].className.indexOf('buttons-pdf') >= 0) {
-                    $.fn.dataTable.ext.buttons.pdfHtml5.available(dt, config) ?
-                        $.fn.dataTable.ext.buttons.pdfHtml5.action.call(self, e, dt, button, config) :
-                        $.fn.dataTable.ext.buttons.pdfFlash.action.call(self, e, dt, button, config);
-                } else if (button[0].className.indexOf('buttons-print') >= 0) {
-                    $.fn.dataTable.ext.buttons.print.action(e, dt, button, config);
-                }
-                dt.one('preXhr', function (e, s, data) {
-                    settings._iDisplayStart = oldStart;
-                    data.start = oldStart;
-                });
-                setTimeout(dt.ajax.reload, 0);
-                return false;
-            });
-        });
-        dt.ajax.reload();
+        warningAlert(`Data terlalu banyak! <hr>Excel maksimal ${excelMaxPeople} orang.<br>Sekarang ${people} orang. Persempit filter lalu coba lagi.`);
+        return;
     }
+
+    if (!(isExcel && excelMaxPeople > 0) && maxLength > 1500) {
+        e.preventDefault();
+        warningAlert('Data terlalu banyak! <hr>pastikan data yang diexport kurang dari 1500 baris');
+        return;
+    }
+
+    if (isExcel && options.excelIncludeTransLog && typeof loadingAlert === 'function') {
+        loadingAlert('Menyiapkan Excel beserta riwayat transaksi...');
+    }
+
+    dt.one('preXhr', function (e, s, data) {
+        data.start = 0;
+        data.length = maxLength;
+        if (isExcel && options.excelIncludeTransLog) {
+            data.include_logs = 1;
+        }
+        dt.one('preDraw', function (e, settings) {
+            if (button[0].className.indexOf('buttons-copy') >= 0) {
+                $.fn.dataTable.ext.buttons.copyHtml5.action.call(self, e, dt, button, config);
+            } else if (button[0].className.indexOf('buttons-excel') >= 0) {
+                $.fn.dataTable.ext.buttons.excelHtml5.available(dt, config) ?
+                    $.fn.dataTable.ext.buttons.excelHtml5.action.call(self, e, dt, button, config) :
+                    $.fn.dataTable.ext.buttons.excelFlash.action.call(self, e, dt, button, config);
+            } else if (button[0].className.indexOf('buttons-csv') >= 0) {
+                $.fn.dataTable.ext.buttons.csvHtml5.available(dt, config) ?
+                    $.fn.dataTable.ext.buttons.csvHtml5.action.call(self, e, dt, button, config) :
+                    $.fn.dataTable.ext.buttons.csvFlash.action.call(self, e, dt, button, config);
+            } else if (button[0].className.indexOf('buttons-pdf') >= 0) {
+                $.fn.dataTable.ext.buttons.pdfHtml5.available(dt, config) ?
+                    $.fn.dataTable.ext.buttons.pdfHtml5.action.call(self, e, dt, button, config) :
+                    $.fn.dataTable.ext.buttons.pdfFlash.action.call(self, e, dt, button, config);
+            } else if (button[0].className.indexOf('buttons-print') >= 0) {
+                $.fn.dataTable.ext.buttons.print.action(e, dt, button, config);
+            }
+            dt.one('preXhr', function (e, s, data) {
+                settings._iDisplayStart = oldStart;
+                data.start = oldStart;
+                delete data.include_logs;
+            });
+            setTimeout(dt.ajax.reload, 0);
+            return false;
+        });
+    });
+    dt.ajax.reload();
 }
 
 function dtButtons(options, buttons) {
@@ -640,6 +666,58 @@ function dtButtons(options, buttons) {
             text: '<i class="ri ri-file-excel-line me-2"></i>Excel',
             exportOptions: {
                 columns: ':visible:not(.no-export)'
+            },
+            customizeData: function (data) {
+                if (!options.excelIncludeTransLog || !data || !Array.isArray(data.body)) {
+                    return;
+                }
+                const table = $.fn.DataTable.isDataTable(`#${options.tableId}`)
+                    ? $(`#${options.tableId}`).DataTable()
+                    : null;
+                if (!table) {
+                    return;
+                }
+                const rows = table.rows({page: 'current', order: 'applied', search: 'applied'}).data().toArray();
+                if (!rows.length) {
+                    return;
+                }
+                const width = (data.header || []).length || (data.body[0] || []).length || 0;
+                if (!width) {
+                    return;
+                }
+                const out = [];
+                data.body.forEach((line, i) => {
+                    out.push(line);
+                    const logs = rows[i] && Array.isArray(rows[i].TRX_LOGS) ? rows[i].TRX_LOGS : [];
+                    if (!logs.length) {
+                        return;
+                    }
+                    const head = Array(width).fill('');
+                    head[0] = 'RIWAYAT';
+                    if (width > 1) head[1] = 'No';
+                    if (width > 2) head[2] = 'Tanggal';
+                    if (width > 3) head[3] = 'Metode';
+                    if (width > 4) head[4] = 'Debet';
+                    if (width > 5) head[5] = 'Kredit';
+                    if (width > 6) head[6] = 'FID Bank';
+                    if (width > 7) head[7] = 'Trans No';
+                    if (width > 8) head[8] = 'No Ref';
+                    out.push(head);
+                    logs.forEach((log, idx) => {
+                        const r = Array(width).fill('');
+                        r[0] = '';
+                        if (width > 1) r[1] = idx + 1;
+                        if (width > 2) r[2] = log.trxdate ?? '-';
+                        if (width > 3) r[3] = log.metode ?? '-';
+                        if (width > 4) r[4] = Number(log.debet ?? 0) || 0;
+                        if (width > 5) r[5] = Number(log.kredit ?? 0) || 0;
+                        if (width > 6) r[6] = log.fidbank ?? '-';
+                        if (width > 7) r[7] = log.transno ?? '-';
+                        if (width > 8) r[8] = log.noreff ?? '-';
+                        out.push(r);
+                    });
+                });
+                data.body = out;
             },
             customize: function (xlsx) {
                 const sheet = xlsx.xl.worksheets['sheet1.xml'];
@@ -910,7 +988,9 @@ function dtButtons(options, buttons) {
             modifier: config.modifier,
             orthogonal: 'export'
         },
-        action: newexportaction
+        action: function (e, dt, button, config) {
+            return newexportaction.call(this, e, dt, button, config, options);
+        }
     }));
 }
 
