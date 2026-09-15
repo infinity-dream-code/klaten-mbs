@@ -863,16 +863,20 @@ function dtButtons(options, buttons) {
                                 return tsDate.toLocaleDateString('id-ID', tsOptions);
                             case 'periode':
                             case 'yearmonth':
-                                if (!data || typeof data !== 'string' || data.length !== 6 || !/^\d{6}$/.test(data)) {
+                                if (data === null || data === undefined || data === '') {
                                     return '';
+                                }
+                                data = String(data);
+                                if (data.length !== 6 || !/^\d{6}$/.test(data)) {
+                                    return data;
                                 }
                                 const monthsID = [
                                     "Januari", "Februari", "Maret", "April", "Mei", "Juni",
                                     "Juli", "Agustus", "September", "Oktober", "November", "Desember"
                                 ];
-                                const pmYear = Math.floor(data / 100);
-                                const pmMonth = data % 100;
-                                return (pmMonth >= 1 && pmMonth <= 12) ? `${monthsID[pmMonth - 1]} ${pmYear}` : '';
+                                const pmYear = Math.floor(Number(data) / 100);
+                                const pmMonth = Number(data) % 100;
+                                return (pmMonth >= 1 && pmMonth <= 12) ? `${monthsID[pmMonth - 1]} ${pmYear}` : data;
                             case 'currency':
                                 if (config.extend !== 'excel') {
                                     return new Intl.NumberFormat('id-ID', {
@@ -1348,16 +1352,20 @@ async function getDT(options) {
                             case 'periode':
                             case 'yearmonth':
                                 renderFunc = function (data, type, row) {
-                                    if (!data || typeof data !== 'string' || data.length !== 6 || !/^\d{6}$/.test(data)) {
+                                    if (data === null || data === undefined || data === '') {
                                         return '';
+                                    }
+                                    data = String(data);
+                                    if (data.length !== 6 || !/^\d{6}$/.test(data)) {
+                                        return data;
                                     }
                                     const monthsIndonesian = [
                                         "Januari", "Februari", "Maret", "April", "Mei", "Juni",
                                         "Juli", "Agustus", "September", "Oktober", "November", "Desember"
                                     ];
-                                    const year = Math.floor(data / 100);
-                                    const month = data % 100;
-                                    return (month >= 1 && month <= 12) ? `${monthsIndonesian[month - 1]} ${year}` : '';
+                                    const year = Math.floor(Number(data) / 100);
+                                    const month = Number(data) % 100;
+                                    return (month >= 1 && month <= 12) ? `${monthsIndonesian[month - 1]} ${year}` : data;
                                 };
                                 break;
                             case 'timestamp':

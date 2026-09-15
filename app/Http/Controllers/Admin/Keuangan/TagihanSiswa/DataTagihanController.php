@@ -149,11 +149,11 @@ class DataTagihanController extends Controller
             ['data' => 'DESC02', 'name' => 'Kelas', 'searchable' => true, 'orderable' => true, 'exportable' => true],
             ['data' => 'DESC03', 'name' => 'Kelompok', 'searchable' => true, 'orderable' => true, 'exportable' => true],
             ['data' => 'BILLNM', 'name' => 'Nama Tagihan', 'searchable' => true, 'orderable' => true, 'exportable' => true],
+            ['data' => 'BILLAC', 'name' => 'Bulan Tagihan', 'searchable' => true, 'orderable' => true, 'exportable' => true, 'columnType' => 'periode'],
             ['data' => 'BILLAM_TOTAL', 'name' => 'Jumlah Tagihan', 'searchable' => true, 'orderable' => true, 'columnType' => 'currency', 'className' => 'text-end', 'exportable' => true],
             ['data' => 'BILLAM', 'name' => 'Sisa Tagihan', 'searchable' => true, 'orderable' => true, 'columnType' => 'currency', 'className' => 'text-end', 'exportable' => true],
             ['data' => 'BILLPAID', 'name' => 'Jumlah Terbayar', 'searchable' => true, 'orderable' => true, 'columnType' => 'currency', 'className' => 'text-end', 'exportable' => true],
             ['data' => 'PAIDDT', 'name' => 'Tanggal Bayar', 'searchable' => true, 'orderable' => true, 'columnType' => 'timestamp', 'exportable' => true],
-            ['data' => 'BILLAC', 'name' => 'Periode', 'searchable' => true, 'orderable' => true, 'exportable' => true],
             [
                 'data' => 'FUrutan',
                 'name' => 'Urutan',
@@ -777,7 +777,8 @@ class DataTagihanController extends Controller
                     'BILLAM' => $get('PAYMENTLEFT'),
                     'BILLPAID' => $get('BILLPAID'),
                     'PAYMENTLEFT' => $get('PAYMENTLEFT'),
-                    'BILLAC' => $get('BILLAC'),
+                    'BILLAC' => scctbill::normalizeBillac($get('BILLAC')),
+                    'BULAN_TAGIHAN' => scctbill::formatPeriodeBulan($get('BILLAC')),
                     'BTA' => $get('BTA'),
                     'PAIDST' => $get('PAIDST'),
                     'INSTALLMENT' => (int) ($get('INSTALLMENT') ?? 0),
@@ -804,7 +805,7 @@ class DataTagihanController extends Controller
             "recordsFiltered" => $totalRecordswithFilter ?? 0,
             "data" => $records ?? [],
             'totals' => [
-                'tagihan' => ['location' => 11, 'value' => $totalTagihan, 'columnType' => 'currency'],
+                'tagihan' => ['location' => 12, 'value' => $totalTagihan, 'columnType' => 'currency'],
             ]
         );
         return response()->json($response);

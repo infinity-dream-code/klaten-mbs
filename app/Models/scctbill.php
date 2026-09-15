@@ -61,4 +61,40 @@ class scctbill extends Model
         null => "Nomor VA",
         "" => "Nomor VA",
     ];
+
+    /** BILLAC YYYYMM (contoh 202609) → "September 2026". */
+    public static function formatPeriodeBulan(mixed $billac): string
+    {
+        $digits = preg_replace('/\D/', '', (string) $billac) ?? '';
+        if (strlen($digits) < 6) {
+            return trim((string) $billac);
+        }
+
+        $digits = substr($digits, 0, 6);
+        $month = (int) substr($digits, 4, 2);
+        $year = substr($digits, 0, 4);
+        $names = [
+            1 => 'Januari', 2 => 'Februari', 3 => 'Maret', 4 => 'April',
+            5 => 'Mei', 6 => 'Juni', 7 => 'Juli', 8 => 'Agustus',
+            9 => 'September', 10 => 'Oktober', 11 => 'November', 12 => 'Desember',
+        ];
+
+        if (!isset($names[$month])) {
+            return $digits;
+        }
+
+        return $names[$month] . ' ' . $year;
+    }
+
+    public static function normalizeBillac(mixed $billac): ?string
+    {
+        $digits = preg_replace('/\D/', '', (string) $billac) ?? '';
+        if (strlen($digits) < 6) {
+            $raw = trim((string) $billac);
+
+            return $raw !== '' ? $raw : null;
+        }
+
+        return substr($digits, 0, 6);
+    }
 }

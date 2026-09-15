@@ -150,7 +150,7 @@
                                     <option value="all">Semua</option>
                                     @isset($periode)
                                         @foreach($periode as $item)
-                                            <option value="{{$item}}">{{$item}}</option>
+                                            <option value="{{$item}}">{{ \App\Models\scctbill::formatPeriodeBulan($item) }}</option>
                                         @endforeach
                                     @else
                                         <option>data kosong</option>
@@ -492,7 +492,7 @@
     <script src="{{asset('main/libs/select2/select2.js')}}"></script>
     <script src="{{asset('main/libs/datatables-bs5/datatables-bootstrap5.js')}}"></script>
     <script src="{{asset('js/va-format.js')}}?v=20260619"></script>
-    <script src="{{asset('js/datatableCustom/Datatable-0-4.js')}}?v=20260724-excel-total-fix"></script>
+    <script src="{{asset('js/datatableCustom/Datatable-0-4.js')}}?v=20260915-periode"></script>
     <script>
         window.DATA_TAGIHAN_BOOT = {
             columnUrl: @json($columnsUrl ?? null),
@@ -1614,7 +1614,7 @@
                         tableBody.push([
                             {text: String(index + 1), alignment: 'center', border: [true, true, true, true]},
                             {text: tanggalBayar, border: [true, true, true, true]},
-                            {text: item.BILLAC || '-', border: [true, true, true, true]},
+                            {text: item.BULAN_TAGIHAN || item.BILLAC || '-', border: [true, true, true, true]},
                             {text: item.BILLNM || '-', border: [true, true, true, true]},
                             {text: formatRupiah(jumlahTagihan), alignment: 'right', border: [true, true, true, true]},
                             {text: formatRupiah(jumlahBayar), alignment: 'right', border: [true, true, true, true]},
