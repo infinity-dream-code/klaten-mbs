@@ -856,6 +856,7 @@ function newexportaction(e, dt, button, config, options = {}) {
             data.include_logs = 1;
         }
         dt.one('preDraw', function (e, settings) {
+            try {
             if (button[0].className.indexOf('buttons-copy') >= 0) {
                 $.fn.dataTable.ext.buttons.copyHtml5.action.call(self, e, dt, button, config);
             } else if (button[0].className.indexOf('buttons-excel') >= 0) {
@@ -872,6 +873,22 @@ function newexportaction(e, dt, button, config, options = {}) {
                     $.fn.dataTable.ext.buttons.pdfFlash.action.call(self, e, dt, button, config);
             } else if (button[0].className.indexOf('buttons-print') >= 0) {
                 $.fn.dataTable.ext.buttons.print.action(e, dt, button, config);
+            }
+            if (isExcel && options.excelIncludeTransLog) {
+                if (typeof successAlert === 'function') {
+                    successAlert('File Excel telah diunduh.<br><small>Cek folder unduhan browser.</small>');
+                } else if (typeof Swal !== 'undefined') {
+                    Swal.close();
+                }
+            }
+            } catch (err) {
+                console.error(err);
+                if (typeof Swal !== 'undefined') {
+                    Swal.close();
+                }
+                if (typeof errorAlert === 'function') {
+                    errorAlert('Gagal membuat file export.');
+                }
             }
             dt.one('preXhr', function (e, s, data) {
                 settings._iDisplayStart = oldStart;

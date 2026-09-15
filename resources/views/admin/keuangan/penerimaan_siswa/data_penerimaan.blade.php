@@ -395,7 +395,7 @@
 
     {{--    <script src="{{asset('main/libs/select2/select2.full.min.js')}}"></script>--}}
     <script src="{{asset('main/libs/datatables-bs5/datatables-bootstrap5.js')}}"></script>
-    <script src="{{asset('js/datatableCustom/Datatable-0-4.js')}}?v=20260915-excel-riwayat2"></script>
+    <script src="{{asset('js/datatableCustom/Datatable-0-4.js')}}?v=20260915-excel-riwayat3"></script>
     <script src="{{asset('main/libs/moment/moment.js')}}"></script>
     <script src="{{asset('main/libs/bootstrap-datepicker/bootstrap-datepicker.js')}}"></script>
 
@@ -491,7 +491,7 @@
             buttons: ['excel'],
             excelCurrencyTotal: true,
             excelIncludeTransLog: true,
-            excelMaxPeople: 1000,
+            excelMaxPeople: 1500,
             excelSheetName: 'Data Pembayaran',
         };
 

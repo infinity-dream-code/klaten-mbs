@@ -492,7 +492,7 @@
     <script src="{{asset('main/libs/select2/select2.js')}}"></script>
     <script src="{{asset('main/libs/datatables-bs5/datatables-bootstrap5.js')}}"></script>
     <script src="{{asset('js/va-format.js')}}?v=20260619"></script>
-    <script src="{{asset('js/datatableCustom/Datatable-0-4.js')}}?v=20260915-excel-riwayat2"></script>
+    <script src="{{asset('js/datatableCustom/Datatable-0-4.js')}}?v=20260915-excel-riwayat3"></script>
     <script>
         window.DATA_TAGIHAN_BOOT = {
             columnUrl: @json($columnsUrl ?? null),
@@ -500,7 +500,7 @@
             prefetchedColumns: @json($tableColumns ?? []),
         };
     </script>
-    <script src="{{asset('js/data-tagihan-init.js')}}?v=20260915-excel-riwayat2"></script>
+    <script src="{{asset('js/data-tagihan-init.js')}}?v=20260915-excel-1500"></script>
     <script src="{{asset('main/libs/moment/moment.js')}}"></script>
     <script src="{{asset('main/libs/bootstrap-daterangepicker/bootstrap-daterangepicker.js')}}"></script>
 
@@ -549,7 +549,7 @@
             buttons: ["excel", "pdf", "print"],
             excelCurrencyTotal: true,
             excelIncludeTransLog: true,
-            excelMaxPeople: 1000,
+            excelMaxPeople: 1500,
             excelSheetName: 'Data Tagihan',
             pdfOrientation: 'landscape',
             pdfPageSize: 'A3',

@@ -50,7 +50,7 @@
             buttons: ['excel', 'pdf', 'print'],
             excelCurrencyTotal: true,
             excelIncludeTransLog: true,
-            excelMaxPeople: 1000,
+            excelMaxPeople: 1500,
             excelSheetName: 'Data Tagihan',
             pdfOrientation: 'landscape',
             pdfPageSize: 'A3',
