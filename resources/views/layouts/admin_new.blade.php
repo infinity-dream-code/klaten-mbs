@@ -301,7 +301,7 @@
 <!-- Main JS -->
 <script src="{{asset('js/main.js')}}"></script>
 
-<script src="{{asset('js/alerts.min.js')}}"></script>
+<script src="{{asset('js/alerts.min.js')}}?v=20260915-auth"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@4.5.0/fonts/remixicon.css"/>
 
 <style>
@@ -377,7 +377,7 @@
         });
     })
 </script>
-<script src="{{ asset('js/session-keepalive.js') }}?v=20260915"></script>
+<script src="{{ asset('js/session-keepalive.js') }}?v=20260915-auth"></script>
 
 @hasSection('errorInputHelper')
     <script src="{{asset('js/helper/errorInputHelper.min.js')}}"></script>

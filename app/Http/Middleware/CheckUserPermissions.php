@@ -18,7 +18,7 @@ class CheckUserPermissions
     {
         if (!Auth::check()) {
             if ($request->expectsJson() || $request->ajax() || $request->wantsJson()) {
-                return response()->json(['message' => 'Unauthenticated.', 'retry' => true], 401);
+                return response()->json(['retry' => true, 'token' => csrf_token()], 401);
             }
 
             return redirect('login');

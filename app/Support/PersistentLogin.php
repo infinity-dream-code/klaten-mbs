@@ -6,6 +6,7 @@ use App\Models\CyberKey;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cookie;
+use Illuminate\Support\Facades\Crypt;
 use Throwable;
 
 class PersistentLogin
@@ -69,11 +70,8 @@ class PersistentLogin
 
     public static function userFromRequest(Request $request): ?CyberKey
     {
-        $raw = $request->cookie(self::COOKIE);
-        if (!is_string($raw) || trim($raw) === '') {
-            $raw = $request->cookies->get(self::COOKIE);
-        }
-        if (!is_string($raw) || trim($raw) === '') {
+        $raw = self::rawCookieValue($request);
+        if ($raw === null) {
             return null;
         }
 
@@ -99,6 +97,21 @@ class PersistentLogin
         }
     }
 
+    private static function rawCookieValue(Request $request): ?string
+    {
+        foreach ([
+            $request->cookie(self::COOKIE),
+            $request->cookies->get(self::COOKIE),
+            $_COOKIE[self::COOKIE] ?? null,
+        ] as $raw) {
+            if (is_string($raw) && trim($raw) !== '') {
+                return trim($raw);
+            }
+        }
+
+        return null;
+    }
+
     private static function encodePayload(CyberKey $user): string
     {
         $encoded = rtrim(strtr(base64_encode(json_encode([
@@ -111,7 +124,28 @@ class PersistentLogin
 
     private static function decodePayload(string $raw): ?array
     {
+        $candidates = [$raw, urldecode($raw)];
+
+        foreach (self::decryptLegacy($raw) as $legacy) {
+            $candidates[] = $legacy;
+        }
+
+        foreach (array_unique(array_filter($candidates, 'is_string')) as $candidate) {
+            $parsed = self::parseCandidate($candidate);
+            if ($parsed) {
+                return $parsed;
+            }
+        }
+
+        return null;
+    }
+
+    private static function parseCandidate(string $raw): ?array
+    {
         $raw = trim($raw);
+        if ($raw === '') {
+            return null;
+        }
 
         if (str_contains($raw, '.')) {
             [$encoded, $signature] = explode('.', $raw, 2);
@@ -126,6 +160,29 @@ class PersistentLogin
         $data = json_decode($raw, true);
 
         return is_array($data) ? $data : null;
+    }
+
+    /** @return list<string> */
+    private static function decryptLegacy(string $raw): array
+    {
+        $found = [];
+
+        try {
+            $found[] = Crypt::decryptString($raw);
+        } catch (Throwable $e) {
+            //
+        }
+
+        try {
+            $decrypted = Crypt::decrypt($raw, false);
+            if (is_string($decrypted)) {
+                $found[] = $decrypted;
+            }
+        } catch (Throwable $e) {
+            //
+        }
+
+        return $found;
     }
 
     private static function signature(string $encoded): string

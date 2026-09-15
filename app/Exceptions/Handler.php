@@ -85,8 +85,9 @@ class Handler extends ExceptionHandler
 
             if ($this->isAjaxRequest($request)) {
                 return response()->json([
-                    'message' => 'Unauthenticated.',
+                    'ok' => true,
                     'retry' => true,
+                    'token' => csrf_token(),
                 ], 401);
             }
 

@@ -34,6 +34,37 @@
         }
     }
 
+    function isSessionNoise(message) {
+        const text = String(message || '')
+            .replace(/<[^>]*>/g, ' ')
+            .toLowerCase();
+
+        return text.includes('unauthenticated')
+            || text.includes('sesi anda')
+            || text.includes('sesi sudah')
+            || text.includes('sesi berakhir')
+            || text.includes('session expired')
+            || text.includes('login kembali')
+            || text.includes('silahkan login')
+            || text.includes('silakan login');
+    }
+
+    function wrapErrorAlert() {
+        if (typeof window.errorAlert !== 'function' || window.errorAlert.__mbsWrapped) {
+            return;
+        }
+
+        const original = window.errorAlert;
+        window.errorAlert = function (message) {
+            if (isSessionNoise(message)) {
+                keepAlive();
+                return;
+            }
+            return original.apply(this, arguments);
+        };
+        window.errorAlert.__mbsWrapped = true;
+    }
+
     function keepAlive() {
         if (keepAliveInFlight) {
             return keepAliveInFlight;
@@ -72,6 +103,7 @@
 
     function withCsrfHeaders(init) {
         const next = Object.assign({}, init || {});
+        next.credentials = next.credentials || 'same-origin';
         const headers = new Headers(next.headers || {});
         const token = currentToken();
         if (token && !headers.has('X-CSRF-TOKEN') && !headers.has('X-XSRF-TOKEN')) {
@@ -100,7 +132,16 @@
         return status === 419 || status === 401;
     }
 
+    function isKeepAliveUrl(input) {
+        const url = typeof input === 'string' ? input : (input && input.url ? input.url : '');
+        return typeof url === 'string' && url.indexOf('/keep-alive') !== -1;
+    }
+
     window.fetch = function (input, init) {
+        if (isKeepAliveUrl(input)) {
+            return nativeFetch(input, init);
+        }
+
         const firstInit = withCsrfHeaders(init);
 
         return nativeFetch(input, firstInit).then(function (res) {
@@ -109,9 +150,6 @@
             }
 
             return keepAlive().then(function (token) {
-                if (!token && res.status === 401) {
-                    return res;
-                }
                 return nativeFetch(input, retryInit(init, token || currentToken()));
             });
         });
@@ -140,23 +178,42 @@
                 return originalAjax(settings);
             }
 
+            const userError = settings.error;
+            const userSuccess = settings.success;
+            const userComplete = settings.complete;
+            const userStatusCode = settings.statusCode;
+            delete settings.error;
+            delete settings.success;
+            delete settings.complete;
+            delete settings.statusCode;
+
             const dfd = $.Deferred();
             const first = originalAjax(settings);
 
+            function succeed(ctx, args) {
+                if (typeof userSuccess === 'function') {
+                    userSuccess.apply(ctx, args);
+                }
+                dfd.resolveWith(ctx, args);
+            }
+
+            function fail(ctx, args) {
+                if (typeof userError === 'function') {
+                    userError.apply(ctx, args);
+                }
+                dfd.rejectWith(ctx, args);
+            }
+
             first.done(function () {
-                dfd.resolveWith(this, arguments);
+                succeed(this, arguments);
             }).fail(function (jqXHR, textStatus, errorThrown) {
                 if (!jqXHR || !shouldRetryStatus(jqXHR.status)) {
-                    dfd.rejectWith(this, arguments);
+                    fail(this, arguments);
                     return;
                 }
 
+                const ctx = this;
                 keepAlive().then(function (token) {
-                    if (!token && jqXHR.status === 401) {
-                        dfd.rejectWith(this, [jqXHR, textStatus, errorThrown]);
-                        return;
-                    }
-
                     const retrySettings = $.extend(true, {}, settings);
                     retrySettings._mbsRetried = true;
                     retrySettings.headers = $.extend({}, retrySettings.headers, {
@@ -164,12 +221,18 @@
                     });
 
                     originalAjax(retrySettings).done(function () {
-                        dfd.resolveWith(this, arguments);
+                        succeed(this, arguments);
                     }).fail(function () {
-                        dfd.rejectWith(this, arguments);
+                        fail(this, arguments);
                     });
-                }.bind(this));
+                }.bind(ctx));
             });
+
+            if (typeof userComplete === 'function') {
+                dfd.always(function () {
+                    userComplete.apply(this, arguments);
+                });
+            }
 
             return dfd.promise(first);
         };
@@ -177,10 +240,12 @@
         $.ajax.__mbsPatched = true;
     }
 
+    wrapErrorAlert();
     if (window.jQuery) {
         patchJQueryAjax(window.jQuery);
     } else {
         document.addEventListener('DOMContentLoaded', function () {
+            wrapErrorAlert();
             if (window.jQuery) {
                 patchJQueryAjax(window.jQuery);
             }
