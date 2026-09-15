@@ -51,6 +51,7 @@
             excelCurrencyTotal: true,
             excelIncludeTransLog: true,
             excelMaxPeople: 1000,
+            excelSheetName: 'Data Tagihan',
             pdfOrientation: 'landscape',
             pdfPageSize: 'A3',
             pdfMargins: [10, 14, 10, 14],

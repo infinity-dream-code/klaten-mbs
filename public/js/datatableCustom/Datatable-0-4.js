@@ -582,6 +582,242 @@ function addCustomNumberFormat(xlsx, numberFormat) {
 }
 
 
+function excelWidthForColumn(col) {
+    const type = String(col.columnType || '').toLowerCase();
+    const name = String(col.name || col.data || '').toLowerCase();
+    if (type === 'row' || name === 'no') return 8;
+    if (type === 'timestamp' || type === 'datetime' || type === 'date' || type === 'basicdate') return 24;
+    if (type === 'currency' || type === 'money' || type === 'rupiah') return 18;
+    if (type === 'periode') return 18;
+    if (name.includes('tagihan')) return 24;
+    if (name === 'nama' || name.includes('nama')) return 28;
+    if (name.includes('nis') || name.includes('daft') || name.includes('va')) return 16;
+    if (name.includes('metode')) return 22;
+    return Math.max(12, Math.min(26, String(col.name || '').length + 6));
+}
+
+function escapeExcelText(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
+}
+
+function formatExcelRupiahText(amount) {
+    const value = Number(amount) || 0;
+    if (value === 0) return '-';
+    return 'Rp. ' + value.toLocaleString('id-ID');
+}
+
+function getWorkbookRels(xlsx) {
+    return xlsx?.xl?._rels?.['workbook.xml.rels']
+        || xlsx?.xl?.['_rels']?.['workbook.xml.rels']
+        || xlsx?.['xl/_rels/workbook.xml.rels']
+        || null;
+}
+
+function nextWorkbookRelId(relsXml) {
+    const ids = Array.from(relsXml.getElementsByTagName('Relationship'))
+        .map((rel) => parseInt(String(rel.getAttribute('Id') || '').replace(/rId/i, ''), 10))
+        .filter((n) => Number.isFinite(n));
+    return 'rId' + ((ids.length ? Math.max(...ids) : 0) + 1);
+}
+
+function setExcelColumnWidths(sheet, widths) {
+    if (!sheet || !widths?.length) return;
+    const doc = sheet.nodeType === 9 ? sheet : (sheet.ownerDocument || sheet);
+    const worksheet = sheet.getElementsByTagName?.('worksheet')[0] || sheet.documentElement || sheet;
+    const sheetData = worksheet.getElementsByTagName('sheetData')[0];
+    if (!sheetData) return;
+
+    const oldCols = worksheet.getElementsByTagName('cols')[0];
+    if (oldCols) oldCols.parentNode.removeChild(oldCols);
+
+    const cols = doc.createElement('cols');
+    widths.forEach((width, idx) => {
+        const col = doc.createElement('col');
+        col.setAttribute('min', String(idx + 1));
+        col.setAttribute('max', String(idx + 1));
+        col.setAttribute('width', String(width));
+        col.setAttribute('customWidth', '1');
+        cols.appendChild(col);
+    });
+    worksheet.insertBefore(cols, sheetData);
+}
+
+function freezeExcelHeader(sheet) {
+    const doc = sheet.nodeType === 9 ? sheet : (sheet.ownerDocument || sheet);
+    const worksheet = sheet.getElementsByTagName?.('worksheet')[0] || sheet.documentElement || sheet;
+    const sheetData = worksheet.getElementsByTagName('sheetData')[0];
+    if (!sheetData) return;
+
+    const oldViews = worksheet.getElementsByTagName('sheetViews')[0];
+    if (oldViews) oldViews.parentNode.removeChild(oldViews);
+
+    const views = doc.createElement('sheetViews');
+    const view = doc.createElement('sheetView');
+    view.setAttribute('workbookViewId', '0');
+    const pane = doc.createElement('pane');
+    pane.setAttribute('ySplit', '1');
+    pane.setAttribute('topLeftCell', 'A2');
+    pane.setAttribute('activePane', 'bottomLeft');
+    pane.setAttribute('state', 'frozen');
+    view.appendChild(pane);
+    views.appendChild(view);
+
+    const cols = worksheet.getElementsByTagName('cols')[0];
+    worksheet.insertBefore(views, cols || sheetData);
+}
+
+function addExcelAutoFilter(sheet, colCount, rowCount) {
+    if (colCount < 1 || rowCount < 1) return;
+    const doc = sheet.nodeType === 9 ? sheet : (sheet.ownerDocument || sheet);
+    const worksheet = sheet.getElementsByTagName?.('worksheet')[0] || sheet.documentElement || sheet;
+    const old = worksheet.getElementsByTagName('autoFilter')[0];
+    if (old) old.parentNode.removeChild(old);
+
+    const autoFilter = doc.createElement('autoFilter');
+    autoFilter.setAttribute('ref', `A1:${getExcelColumnName(colCount - 1)}${rowCount}`);
+    const sheetData = worksheet.getElementsByTagName('sheetData')[0];
+    if (sheetData && sheetData.nextSibling) {
+        worksheet.insertBefore(autoFilter, sheetData.nextSibling);
+    } else {
+        worksheet.appendChild(autoFilter);
+    }
+}
+
+function renameExcelSheet(xlsx, fileName, title) {
+    const safeName = String(title || 'Sheet').replace(/[:\\/?*[\]]/g, ' ').slice(0, 31);
+    const workbook = xlsx.xl['workbook.xml'];
+    if (!workbook) return;
+    const sheets = workbook.getElementsByTagName('sheet');
+    for (let i = 0; i < sheets.length; i++) {
+        const id = sheets[i].getAttribute('r:id') || '';
+        const nameAttr = sheets[i].getAttribute('name') || '';
+        if (fileName === 'sheet1.xml' && (i === 0 || nameAttr.toLowerCase() === 'sheet1')) {
+            sheets[i].setAttribute('name', safeName);
+            return;
+        }
+        if (id && nameAttr) {
+            continue;
+        }
+    }
+    if (sheets[0]) sheets[0].setAttribute('name', safeName);
+}
+
+function addExcelWorksheet(xlsx, sheetName, rows, widths) {
+    const safeName = String(sheetName || 'Sheet').replace(/[:\\/?*[\]]/g, ' ').slice(0, 31);
+    const rels = getWorkbookRels(xlsx);
+    const workbook = xlsx.xl['workbook.xml'];
+    const contentTypes = xlsx['[Content_Types].xml'];
+    if (!rels || !workbook || !contentTypes) {
+        return null;
+    }
+
+    const existingCount = Object.keys(xlsx.xl.worksheets || {}).length;
+    const sheetFile = `sheet${existingCount + 1}.xml`;
+    const rId = nextWorkbookRelId(rels);
+    const sheetId = String(existingCount + 1);
+
+    let xml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        + '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"'
+        + ' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+        + '<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>';
+
+    if (widths?.length) {
+        xml += '<cols>';
+        widths.forEach((width, idx) => {
+            xml += `<col min="${idx + 1}" max="${idx + 1}" width="${width}" customWidth="1"/>`;
+        });
+        xml += '</cols>';
+    }
+
+    xml += '<sheetData>';
+    rows.forEach((row, rowIdx) => {
+        const r = rowIdx + 1;
+        xml += `<row r="${r}">`;
+        (row || []).forEach((value, colIdx) => {
+            const ref = `${getExcelColumnName(colIdx)}${r}`;
+            xml += `<c r="${ref}" t="inlineStr"><is><t>${escapeExcelText(value)}</t></is></c>`;
+        });
+        xml += '</row>';
+    });
+    xml += '</sheetData>';
+
+    if (rows.length && rows[0]?.length) {
+        xml += `<autoFilter ref="A1:${getExcelColumnName(rows[0].length - 1)}${Math.max(rows.length, 1)}"/>`;
+    }
+    xml += '</worksheet>';
+
+    const parsed = new DOMParser().parseFromString(xml, 'application/xml');
+    if (parsed.getElementsByTagName('parsererror').length) {
+        console.error('Gagal membuat sheet Excel riwayat');
+        return null;
+    }
+    xlsx.xl.worksheets[sheetFile] = parsed;
+
+    const rel = rels.createElement('Relationship');
+    rel.setAttribute('Id', rId);
+    rel.setAttribute('Type', 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet');
+    rel.setAttribute('Target', `worksheets/${sheetFile}`);
+    rels.documentElement.appendChild(rel);
+
+    const sheet = workbook.createElement('sheet');
+    sheet.setAttribute('name', safeName);
+    sheet.setAttribute('sheetId', sheetId);
+    sheet.setAttribute('r:id', rId);
+    workbook.getElementsByTagName('sheets')[0].appendChild(sheet);
+
+    const override = contentTypes.createElement('Override');
+    override.setAttribute('PartName', `/xl/worksheets/${sheetFile}`);
+    override.setAttribute('ContentType', 'application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml');
+    contentTypes.documentElement.appendChild(override);
+
+    return parsed;
+}
+
+function collectExcelRiwayatRows(table) {
+    const rows = table.rows({page: 'current', order: 'applied', search: 'applied'}).data().toArray();
+    const out = [[
+        'No', 'NIS', 'Nama', 'Unit', 'Kelas', 'Kelompok', 'Nama Tagihan',
+        'No Trx', 'Tanggal', 'Metode', 'Debet', 'Kredit', 'FID Bank', 'Trans No', 'No Ref',
+    ]];
+
+    rows.forEach((row, index) => {
+        const logs = Array.isArray(row.TRX_LOGS) ? row.TRX_LOGS : [];
+        if (!logs.length) {
+            return;
+        }
+        logs.forEach((log, trxIdx) => {
+            out.push([
+                index + 1,
+                row.NOCUST ?? row.nocust ?? '-',
+                row.NMCUST ?? row.nmcust ?? '-',
+                row.CODE02 ?? '-',
+                row.DESC02 ?? '-',
+                row.DESC03 ?? '-',
+                row.BILLNM ?? '-',
+                trxIdx + 1,
+                log.trxdate ?? '-',
+                log.metode ?? '-',
+                formatExcelRupiahText(log.debet),
+                formatExcelRupiahText(log.kredit),
+                log.fidbank ?? '-',
+                log.transno ?? '-',
+                log.noreff ?? '-',
+            ]);
+        });
+    });
+
+    if (out.length === 1) {
+        out.push(['-', '-', '-', '-', '-', '-', '-', '-', 'Tidak ada riwayat transaksi', '-', '-', '-', '-', '-', '-']);
+    }
+
+    return out;
+}
+
 function formatTargetColumn(xlsx, col) {
     let sheet = xlsx.xl.worksheets['sheet1.xml'];
     $('row c[r^="' + col + '"]', sheet).attr('s', '68');
@@ -668,7 +904,8 @@ function dtButtons(options, buttons) {
                 columns: ':visible:not(.no-export)'
             },
             customizeData: function (data) {
-                if (!options.excelIncludeTransLog || !data || !Array.isArray(data.body)) {
+                options._excelRiwayatRows = [];
+                if (!options.excelIncludeTransLog) {
                     return;
                 }
                 const table = $.fn.DataTable.isDataTable(`#${options.tableId}`)
@@ -677,61 +914,25 @@ function dtButtons(options, buttons) {
                 if (!table) {
                     return;
                 }
-                const rows = table.rows({page: 'current', order: 'applied', search: 'applied'}).data().toArray();
-                if (!rows.length) {
-                    return;
-                }
-                const width = (data.header || []).length || (data.body[0] || []).length || 0;
-                if (!width) {
-                    return;
-                }
-                const out = [];
-                data.body.forEach((line, i) => {
-                    out.push(line);
-                    const logs = rows[i] && Array.isArray(rows[i].TRX_LOGS) ? rows[i].TRX_LOGS : [];
-                    if (!logs.length) {
-                        return;
-                    }
-                    const head = Array(width).fill('');
-                    head[0] = 'RIWAYAT';
-                    if (width > 1) head[1] = 'No';
-                    if (width > 2) head[2] = 'Tanggal';
-                    if (width > 3) head[3] = 'Metode';
-                    if (width > 4) head[4] = 'Debet';
-                    if (width > 5) head[5] = 'Kredit';
-                    if (width > 6) head[6] = 'FID Bank';
-                    if (width > 7) head[7] = 'Trans No';
-                    if (width > 8) head[8] = 'No Ref';
-                    out.push(head);
-                    logs.forEach((log, idx) => {
-                        const r = Array(width).fill('');
-                        r[0] = '';
-                        if (width > 1) r[1] = idx + 1;
-                        if (width > 2) r[2] = log.trxdate ?? '-';
-                        if (width > 3) r[3] = log.metode ?? '-';
-                        if (width > 4) r[4] = Number(log.debet ?? 0) || 0;
-                        if (width > 5) r[5] = Number(log.kredit ?? 0) || 0;
-                        if (width > 6) r[6] = log.fidbank ?? '-';
-                        if (width > 7) r[7] = log.transno ?? '-';
-                        if (width > 8) r[8] = log.noreff ?? '-';
-                        out.push(r);
-                    });
-                });
-                data.body = out;
+                options._excelRiwayatRows = collectExcelRiwayatRows(table);
             },
             customize: function (xlsx) {
                 const sheet = xlsx.xl.worksheets['sheet1.xml'];
                 const rupiahStyleIndex = addRupiahStyleOnce(xlsx);
-
+                const exportable = (options.dataColumns || []).filter((col) => col.exportable === true);
                 const currencyColumns = [];
-                let excelColIdx = 0;
-                options.dataColumns.forEach(col => {
-                    if (col.exportable !== true) return;
-                    if (col.columnType === 'currency' || col.columnType === 'money' || col.columnType === 'rupiah') {
-                        currencyColumns.push(excelColIdx);
+                const widths = [];
+                exportable.forEach((col, idx) => {
+                    const type = String(col.columnType || '').toLowerCase();
+                    if (type === 'currency' || type === 'money' || type === 'rupiah') {
+                        currencyColumns.push(idx);
                     }
-                    excelColIdx++;
+                    widths.push(excelWidthForColumn(col));
                 });
+
+                setExcelColumnWidths(sheet, widths);
+                freezeExcelHeader(sheet);
+                renameExcelSheet(xlsx, 'sheet1.xml', options.excelSheetName || 'Data');
 
                 applyStyleToColumns(sheet, rupiahStyleIndex, currencyColumns);
                 applyExcelDateStyles(xlsx, sheet, options.dataColumns);
@@ -744,6 +945,20 @@ function dtButtons(options, buttons) {
 
                 if (options.excelCurrencyTotal) {
                     appendExcelCurrencyTotalRow(xlsx, sheet, options.dataColumns, options);
+                }
+
+                const dataRowCount = sheet.getElementsByTagName('row').length || 1;
+                addExcelAutoFilter(sheet, widths.length, Math.max(dataRowCount - (options.excelCurrencyTotal ? 1 : 0), 1));
+
+                if (options.excelIncludeTransLog) {
+                    const riwayatRows = options._excelRiwayatRows?.length
+                        ? options._excelRiwayatRows
+                        : collectExcelRiwayatRows($(`#${options.tableId}`).DataTable());
+                    const riwayatWidths = [8, 14, 28, 10, 10, 12, 24, 10, 22, 20, 16, 16, 14, 24, 16];
+                    const riwayatSheet = addExcelWorksheet(xlsx, 'Riwayat Transaksi', riwayatRows, riwayatWidths);
+                    if (riwayatSheet) {
+                        applyBoldHeaderRow(riwayatSheet, boldHeaderStyleIndex);
+                    }
                 }
             },
         },
