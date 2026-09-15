@@ -4,7 +4,7 @@
         return;
     }
 
-    let keepAliveInFlight = false;
+    let keepAliveInFlight = null;
     const nativeFetch = window.fetch.bind(window);
 
     function currentToken() {
@@ -36,17 +36,19 @@
 
     function keepAlive() {
         if (keepAliveInFlight) {
-            return Promise.resolve(null);
+            return keepAliveInFlight;
         }
 
-        keepAliveInFlight = true;
+        const url = keepAliveUrl + (keepAliveUrl.indexOf('?') === -1 ? '?' : '&') + '_ts=' + Date.now();
 
-        return nativeFetch(keepAliveUrl, {
+        keepAliveInFlight = nativeFetch(url, {
             method: 'GET',
             credentials: 'same-origin',
+            cache: 'no-store',
             headers: {
                 'Accept': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest'
+                'X-Requested-With': 'XMLHttpRequest',
+                'Cache-Control': 'no-cache'
             }
         }).then(function (res) {
             if (!res.ok) {
@@ -62,8 +64,10 @@
         }).catch(function () {
             return null;
         }).finally(function () {
-            keepAliveInFlight = false;
+            keepAliveInFlight = null;
         });
+
+        return keepAliveInFlight;
     }
 
     function withCsrfHeaders(init) {
@@ -80,63 +84,119 @@
     function retryInit(init, token) {
         const next = withCsrfHeaders(init);
         const headers = new Headers(next.headers || {});
-        headers.set('X-CSRF-TOKEN', token);
+        if (token) {
+            headers.set('X-CSRF-TOKEN', token);
+        }
         next.headers = headers;
 
-        if (next.body instanceof FormData) {
+        if (next.body instanceof FormData && token) {
             next.body.set('_token', token);
         }
 
         return next;
     }
 
+    function shouldRetryStatus(status) {
+        return status === 419 || status === 401;
+    }
+
     window.fetch = function (input, init) {
         const firstInit = withCsrfHeaders(init);
 
         return nativeFetch(input, firstInit).then(function (res) {
-            if (res.status !== 419) {
+            if (!shouldRetryStatus(res.status)) {
                 return res;
             }
 
             return keepAlive().then(function (token) {
-                if (!token) {
+                if (!token && res.status === 401) {
                     return res;
                 }
-                return nativeFetch(input, retryInit(init, token));
+                return nativeFetch(input, retryInit(init, token || currentToken()));
             });
         });
     };
 
-    if (window.jQuery) {
-        window.jQuery.ajaxPrefilter(function (options) {
-            if (options._mbsRetried) {
-                return;
+    function patchJQueryAjax($) {
+        if (!$ || $.ajax.__mbsPatched) {
+            return;
+        }
+
+        const originalAjax = $.ajax.bind($);
+
+        $.ajax = function (url, settings) {
+            if (settings === undefined && typeof url === 'object') {
+                settings = url;
+            } else {
+                settings = settings || {};
+                if (url !== undefined) {
+                    settings.url = url;
+                }
             }
 
-            const originalError = options.error;
-            options.error = function (xhr, status, error) {
-                if (xhr && xhr.status === 419) {
-                    keepAlive().then(function (token) {
-                        if (!token) {
-                            if (typeof originalError === 'function') {
-                                originalError.apply(this, [xhr, status, error]);
-                            }
-                            return;
-                        }
-                        const retryOptions = window.jQuery.extend(true, {}, options);
-                        retryOptions._mbsRetried = true;
-                        retryOptions.error = originalError;
-                        window.jQuery.ajax(retryOptions);
-                    });
+            settings = $.extend(true, {}, settings);
+
+            if (settings._mbsRetried) {
+                return originalAjax(settings);
+            }
+
+            const dfd = $.Deferred();
+            const first = originalAjax(settings);
+
+            first.done(function () {
+                dfd.resolveWith(this, arguments);
+            }).fail(function (jqXHR, textStatus, errorThrown) {
+                if (!jqXHR || !shouldRetryStatus(jqXHR.status)) {
+                    dfd.rejectWith(this, arguments);
                     return;
                 }
 
-                if (typeof originalError === 'function') {
-                    originalError.apply(this, arguments);
-                }
-            };
+                keepAlive().then(function (token) {
+                    if (!token && jqXHR.status === 401) {
+                        dfd.rejectWith(this, [jqXHR, textStatus, errorThrown]);
+                        return;
+                    }
+
+                    const retrySettings = $.extend(true, {}, settings);
+                    retrySettings._mbsRetried = true;
+                    retrySettings.headers = $.extend({}, retrySettings.headers, {
+                        'X-CSRF-TOKEN': token || currentToken()
+                    });
+
+                    originalAjax(retrySettings).done(function () {
+                        dfd.resolveWith(this, arguments);
+                    }).fail(function () {
+                        dfd.rejectWith(this, arguments);
+                    });
+                }.bind(this));
+            });
+
+            return dfd.promise(first);
+        };
+
+        $.ajax.__mbsPatched = true;
+    }
+
+    if (window.jQuery) {
+        patchJQueryAjax(window.jQuery);
+    } else {
+        document.addEventListener('DOMContentLoaded', function () {
+            if (window.jQuery) {
+                patchJQueryAjax(window.jQuery);
+            }
         });
     }
 
-    setInterval(keepAlive, 4 * 60 * 1000);
+    document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState === 'visible') {
+            keepAlive();
+        }
+    });
+
+    window.addEventListener('focus', function () {
+        keepAlive();
+    });
+
+    setInterval(keepAlive, 2 * 60 * 1000);
+    keepAlive();
 })();

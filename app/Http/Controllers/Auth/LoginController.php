@@ -101,6 +101,11 @@ class LoginController extends Controller
         return true;
     }
 
+    protected function authenticated(Request $request, $user)
+    {
+        PersistentLogin::queue($user);
+    }
+
     protected function verifyTurnstile(Request $request): void
     {
         $secret = config("services.turnstile.secret_key");

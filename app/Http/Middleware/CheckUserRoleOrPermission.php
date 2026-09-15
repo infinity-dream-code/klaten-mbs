@@ -14,6 +14,10 @@ class CheckUserRoleOrPermission
     public function handle(Request $request, Closure $next, ...$params)
     {
         if (!Auth::check()) {
+            if ($request->expectsJson() || $request->ajax() || $request->wantsJson()) {
+                return response()->json(['message' => 'Unauthenticated.', 'retry' => true], 401);
+            }
+
             return redirect('login');
         }
         $user = Auth::user();

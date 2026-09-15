@@ -12,17 +12,22 @@ class RestorePersistentLogin
 {
     public function handle(Request $request, Closure $next): Response
     {
-        if (!Auth::check()) {
-            $user = PersistentLogin::userFromRequest($request);
+        if (!$request->routeIs('logout')) {
+            $user = Auth::user() ?: PersistentLogin::userFromRequest($request);
             if ($user) {
-                Auth::login($user, false);
+                PersistentLogin::bind($user);
+                PersistentLogin::queue($user);
             }
         }
 
-        if (Auth::check() && !$request->routeIs('logout')) {
-            PersistentLogin::queue(Auth::user());
-        }
+        /** @var Response $response */
+        $response = $next($request);
 
-        return $next($request);
+        $response->headers->set('Cache-Control', 'private, no-store, no-cache, must-revalidate');
+        $response->headers->set('Pragma', 'no-cache');
+        $response->headers->set('Expires', '0');
+        $response->headers->set('CDN-Cache-Control', 'no-store');
+
+        return $response;
     }
 }

@@ -15,12 +15,16 @@ class CheckSession
         if (!Auth::check()) {
             $user = PersistentLogin::userFromRequest($request);
             if ($user) {
-                Auth::login($user, false);
+                PersistentLogin::bind($user);
                 PersistentLogin::queue($user);
             }
         }
 
         if (!Auth::check()) {
+            if ($request->expectsJson() || $request->ajax() || $request->wantsJson()) {
+                return response()->json(['message' => 'Unauthenticated.', 'retry' => true], 401);
+            }
+
             return redirect()->route('login');
         }
 

@@ -3,7 +3,9 @@
 namespace App\Exceptions;
 
 use App\Support\PersistentLogin;
+use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
+use Illuminate\Http\Request;
 use Illuminate\Session\TokenMismatchException;
 use Illuminate\Support\Facades\Auth;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
@@ -36,10 +38,8 @@ class Handler extends ExceptionHandler
     {
         if ($e instanceof TokenMismatchException) {
             $user = Auth::user() ?: PersistentLogin::userFromRequest($request);
-            if ($user && !Auth::check()) {
-                Auth::login($user, false);
-            }
             if ($user) {
+                PersistentLogin::bind($user);
                 PersistentLogin::queue($user);
             }
 
@@ -47,7 +47,7 @@ class Handler extends ExceptionHandler
                 $request->session()->regenerateToken();
             }
 
-            if ($request->expectsJson() || $request->ajax() || $request->wantsJson()) {
+            if ($this->isAjaxRequest($request)) {
                 return response()->json([
                     'ok' => true,
                     'retry' => true,
@@ -62,6 +62,37 @@ class Handler extends ExceptionHandler
             return redirect()->back();
         }
 
+        if ($e instanceof AuthenticationException) {
+            $user = Auth::user() ?: PersistentLogin::userFromRequest($request);
+            if ($user) {
+                PersistentLogin::bind($user);
+                PersistentLogin::queue($user);
+
+                if ($this->isAjaxRequest($request)) {
+                    return response()->json([
+                        'ok' => true,
+                        'retry' => true,
+                        'token' => csrf_token(),
+                    ], 401);
+                }
+
+                if ($request->isMethod('GET')) {
+                    return redirect()->to($request->fullUrl());
+                }
+
+                return redirect()->back();
+            }
+
+            if ($this->isAjaxRequest($request)) {
+                return response()->json([
+                    'message' => 'Unauthenticated.',
+                    'retry' => true,
+                ], 401);
+            }
+
+            return redirect()->guest(route('login'));
+        }
+
         if (
             $request->isMethod('GET')
             && !$request->boolean('_retry')
@@ -71,6 +102,15 @@ class Handler extends ExceptionHandler
         }
 
         return parent::render($request, $e);
+    }
+
+    private function isAjaxRequest(Request $request): bool
+    {
+        return $request->expectsJson()
+            || $request->ajax()
+            || $request->wantsJson()
+            || $request->header('X-Requested-With') === 'XMLHttpRequest'
+            || str_contains((string) $request->header('Accept'), 'application/json');
     }
 
     private function isTransientServerError(Throwable $e): bool
