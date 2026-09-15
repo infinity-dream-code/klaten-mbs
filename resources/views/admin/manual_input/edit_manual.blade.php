@@ -127,6 +127,59 @@
         let tableTagihanDibayar;
         const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
         let select2Param = '';
+        let selectedSiswaCustId = null;
+
+        function getSelectedSiswaRow() {
+            const selected = tableSiswa.rows({selected: true}).data();
+            if (selected[0]?.CUSTID) {
+                return selected[0];
+            }
+
+            const checked = document.querySelector('#table-siswa .checkbox-siswa:checked');
+            if (checked) {
+                const rowData = tableSiswa.row($(checked).closest('tr')).data();
+                if (rowData?.CUSTID) {
+                    return rowData;
+                }
+            }
+
+            if (selectedSiswaCustId) {
+                const all = tableSiswa.rows().data().toArray();
+                const match = all.find((row) => String(row.CUSTID) === String(selectedSiswaCustId));
+                if (match) {
+                    return match;
+                }
+            }
+
+            const allRows = tableSiswa.rows().data();
+            if (allRows.length === 1 && allRows[0]?.CUSTID) {
+                return allRows[0];
+            }
+
+            return null;
+        }
+
+        function selectSiswaRow(custid) {
+            selectedSiswaCustId = custid ? String(custid) : null;
+            if (!tableSiswa || !selectedSiswaCustId) {
+                return;
+            }
+
+            tableSiswa.rows().every(function () {
+                const data = this.data();
+                const isMatch = String(data?.CUSTID) === selectedSiswaCustId;
+                const node = this.node();
+                const checkbox = node?.querySelector('.checkbox-siswa');
+                if (checkbox) {
+                    checkbox.checked = isMatch;
+                }
+                if (isMatch) {
+                    this.select();
+                } else {
+                    this.deselect();
+                }
+            });
+        }
 
         function formatRupiahInput(value) {
             const number = parseInt(String(value ?? '').replace(/\D/g, '') || '0', 10);
@@ -171,11 +224,8 @@
                 }
 
                 setTimeout(function () {
-                    const checkbox = document.getElementById(`siswa-checkbox-${siswa.CUSTID}`);
-                    if (checkbox) {
-                        checkbox.checked = true;
-                        checkbox.dispatchEvent(new Event('change', { bubbles: true }));
-                    }
+                    selectSiswaRow(siswa.CUSTID);
+                    getTagihan(siswa.CUSTID);
                 }, 100);
             }).fail(function (xhr) {
                 if (xhr.status === 422) {
@@ -215,8 +265,11 @@
                 const checkbox = e.target;
                 const isChecked = checkbox.checked;
                 if (isChecked) {
-                    const value = checkbox.value;
-                    getTagihan(value);
+                    selectSiswaRow(checkbox.value);
+                    getTagihan(checkbox.value);
+                } else if (String(selectedSiswaCustId) === String(checkbox.value)) {
+                    selectedSiswaCustId = null;
+                    tableSiswa.rows().deselect();
                 }
             }
         });
@@ -235,6 +288,7 @@
         // });
 
         document.getElementById('btn-reset').addEventListener('click', function (e) {
+            selectedSiswaCustId = null;
             tableTagihan.clear().draw();
             tableTagihanDibayar.clear().draw();
             tableSiswa.clear().draw();
@@ -257,8 +311,8 @@
 
         document.getElementById('btn-edit-tagihan').addEventListener('click', async function (e) {
             e.preventDefault();
-            const selectedSiswa = tableSiswa.rows({selected: true}).data();
-            if (!selectedSiswa[0]?.CUSTID) {
+            const selectedSiswa = getSelectedSiswaRow();
+            if (!selectedSiswa?.CUSTID) {
                 warningAlert('Silahkan pilih 1 siswa')
                 return;
             }
@@ -283,7 +337,7 @@
             }
 
             const formData = new FormData();
-            formData.append('siswa', selectedSiswa[0].CUSTID);
+            formData.append('siswa', selectedSiswa.CUSTID);
             formData.append('tagihan', selectedTagihan.data()[0].AA);
             formData.append('nominal', nominal);
             formData.append('_token', csrfToken);
@@ -303,7 +357,7 @@
 
             let result = await submitForm(request);
             if (result) {
-                await getTagihan(selectedSiswa[0].CUSTID, false);
+                await getTagihan(selectedSiswa.CUSTID, false);
                 successAlert(result.message);
             }
         });
