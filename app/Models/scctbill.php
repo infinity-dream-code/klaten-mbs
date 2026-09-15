@@ -66,6 +66,9 @@ class scctbill extends Model
     public static function formatPeriodeBulan(mixed $billac): string
     {
         $digits = preg_replace('/\D/', '', (string) $billac) ?? '';
+        if (strlen($digits) === 4) {
+            return $digits;
+        }
         if (strlen($digits) < 6) {
             return trim((string) $billac);
         }

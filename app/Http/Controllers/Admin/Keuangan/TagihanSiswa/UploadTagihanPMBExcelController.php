@@ -181,13 +181,15 @@ class UploadTagihanPMBExcelController extends Controller
         $request->validate([
             'tagihan' => ['required'],
             'periode_tahun' => ['required', 'integer', 'digits:4', 'min:2000', 'max:2099'],
-            'periode_bulan' => ['required', 'integer', 'min:1', 'max:12'],
+            'periode_bulan' => ['nullable', 'integer', 'min:1', 'max:12'],
         ], ValidationMessage::messages(), ValidationMessage::attributes());
 
         $data = Cache::get($this->cacheKey);
         if (empty($data))return response()->json(['message' => 'Silahkan import data tagihan terlebih dahulu'], 422);
 
-        $bta = sprintf('%04d%02d', (int) $request->periode_tahun, (int) $request->periode_bulan);
+        $bta = $request->filled('periode_bulan')
+            ? sprintf('%04d%02d', (int) $request->periode_tahun, (int) $request->periode_bulan)
+            : sprintf('%04d', (int) $request->periode_tahun);
 
         $tagihan = mst_tagihan::where('urut', $request->tagihan)->first();
         if (!$tagihan) return response()->json(['message' => 'Tagihan tidak ditemukan, silahkan muat ulang halaman!'], 422);
