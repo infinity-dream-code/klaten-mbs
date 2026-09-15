@@ -364,9 +364,9 @@
                 const billPaid = Number(item.BILLPAID ?? 0);
                 const installment = Number(item.INSTALLMENT ?? 0);
 
-                if (paidSt === 1 || billPaid > 0 || installment > 0) {
+                if (paidSt === 1) {
                     acc.paid.push(item);
-                } else {
+                } else if (billPaid === 0 && installment === 0) {
                     acc.unpaid.push(item);
                 }
                 return acc;
