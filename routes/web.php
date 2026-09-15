@@ -218,7 +218,7 @@ Route::prefix("admin")
                     Route::get("get-siswa", "getSiswa")->name("get-siswa");
                     Route::get("get-tagihan", "getTagihan")->name("get-tagihan");
                     Route::get("get-detail-taighan", "getDetailTagihan")->name("get-detail-tagihan");
-                    Route::put("edit-tagihan", "editTagihan")->name("edit-tagihan");
+                    Route::match(['POST', 'PUT'], "edit-tagihan", "editTagihan")->name("edit-tagihan");
                     Route::post("copy-tagihan", "copyTagihan")->name("copy-tagihan");
                     Route::resource("", \App\Http\Controllers\Admin\ManualInput\EditManualController::class)->parameters(["" => "id"]);
                 });

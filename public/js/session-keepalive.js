@@ -142,15 +142,18 @@
             return nativeFetch(input, init);
         }
 
+        const canClone = typeof Request !== 'undefined' && input instanceof Request;
+        const firstInput = canClone ? input.clone() : input;
         const firstInit = withCsrfHeaders(init);
 
-        return nativeFetch(input, firstInit).then(function (res) {
+        return nativeFetch(firstInput, firstInit).then(function (res) {
             if (!shouldRetryStatus(res.status)) {
                 return res;
             }
 
             return keepAlive().then(function (token) {
-                return nativeFetch(input, retryInit(init, token || currentToken()));
+                const secondInput = canClone ? input.clone() : input;
+                return nativeFetch(secondInput, retryInit(init, token || currentToken()));
             });
         });
     };

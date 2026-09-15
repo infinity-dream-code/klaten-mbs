@@ -286,7 +286,7 @@
             formData.append('siswa', selectedSiswa[0].CUSTID);
             formData.append('tagihan', selectedTagihan.data()[0].AA);
             formData.append('nominal', nominal);
-            formData.append('_method', 'PUT');
+            formData.append('_token', csrfToken);
 
             loadingAlert('Mengedit data...');
             const request = new Request(
@@ -295,6 +295,8 @@
                     method: "POST",
                     headers: {
                         'X-CSRF-TOKEN': csrfToken,
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Accept': 'application/json',
                     },
                     body: formData
                 });
